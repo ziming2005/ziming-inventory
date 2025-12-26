@@ -504,6 +504,19 @@ const ClinicAnalytics: React.FC<ClinicAnalyticsProps> = ({ history }) => {
 
   return (
     <div className="flex flex-col gap-10 animate-in fade-in zoom-in-95 duration-300">
+      <style>{`
+        @keyframes slow-spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-donut-spin {
+          animation: slow-spin 35s linear infinite;
+        }
+        /* Stop spinning when hovering specifically on the animated group */
+        .animate-donut-spin:hover {
+          animation-play-state: paused !important;
+        }
+      `}</style>
       <div className="flex items-center gap-3 mb-4 animate-in slide-in-from-left-4 duration-500">
         <div className="bg-indigo-100 p-3 rounded-2xl text-indigo-600">
           <BarChart3 className="w-6 h-6" />
@@ -820,43 +833,51 @@ const ClinicAnalytics: React.FC<ClinicAnalyticsProps> = ({ history }) => {
                 const center = size / 2;
                 return (
                   <svg width={size} height={260} viewBox={`0 0 ${size} 260`} className="mx-auto overflow-visible">
-                    {(() => {
-                      const radius = 70;
-                      const strokeWidth = 28;
-                      let cumulativeAngle = -Math.PI / 2;
-                      const colors = ['#2563eb', '#facc15', '#f97316', '#3b82f6', '#9333ea', '#dc2626', '#10b981'];
+                    <g 
+                      className="animate-donut-spin" 
+                      style={{ 
+                        transformOrigin: `${center}px ${center}px`,
+                        animationPlayState: isMouseOverSVG ? 'paused' : 'running'
+                      }}
+                    >
+                      {(() => {
+                        const radius = 70;
+                        const strokeWidth = 28;
+                        let cumulativeAngle = -Math.PI / 2;
+                        const colors = ['#2563eb', '#facc15', '#f97316', '#3b82f6', '#9333ea', '#dc2626', '#10b981'];
 
-                      return currentBreakdown.map((cat, idx) => {
-                        if (cat.amount === 0) return null;
-                        const angle = (cat.amount / totalValue) * 2 * Math.PI;
-                        const x1 = center + radius * Math.cos(cumulativeAngle);
-                        const y1 = center + radius * Math.sin(cumulativeAngle);
-                        cumulativeAngle += angle;
-                        const x2 = center + radius * Math.cos(cumulativeAngle);
-                        const y2 = center + radius * Math.sin(cumulativeAngle);
+                        return currentBreakdown.map((cat, idx) => {
+                          if (cat.amount === 0) return null;
+                          const angle = (cat.amount / totalValue) * 2 * Math.PI;
+                          const x1 = center + radius * Math.cos(cumulativeAngle);
+                          const y1 = center + radius * Math.sin(cumulativeAngle);
+                          cumulativeAngle += angle;
+                          const x2 = center + radius * Math.cos(cumulativeAngle);
+                          const y2 = center + radius * Math.sin(cumulativeAngle);
 
-                        const largeArcFlag = angle > Math.PI ? 1 : 0;
-                        const isFullCircle = angle >= (2 * Math.PI - 0.001);
-                        const pathData = isFullCircle ? "" : `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`;
-                        const isHovered = hoveredIdx === idx;
+                          const largeArcFlag = angle > Math.PI ? 1 : 0;
+                          const isFullCircle = angle >= (2 * Math.PI - 0.001);
+                          const pathData = isFullCircle ? "" : `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`;
+                          const isHovered = hoveredIdx === idx;
 
-                        return (
-                          <g key={cat.id} className="group">
-                            {isFullCircle ? (
-                              <circle cx={center} cy={center} r={radius} fill="none" stroke={colors[idx % colors.length]} strokeWidth={strokeWidth} 
-                                className="transition-all duration-300 cursor-pointer origin-center"
-                                style={{ transform: isHovered ? 'scale(1.05)' : 'scale(1)', opacity: (hoveredIdx !== null && !isHovered) ? 0.3 : 1 }}
-                                onMouseEnter={() => setHoveredIdx(idx)} onMouseLeave={() => setHoveredIdx(null)} />
-                            ) : (
-                              <path d={pathData} fill="none" stroke={colors[idx % colors.length]} strokeWidth={strokeWidth}
-                                className="transition-all duration-300 cursor-pointer origin-center"
-                                style={{ transform: isHovered ? 'scale(1.05)' : 'scale(1)', opacity: (hoveredIdx !== null && !isHovered) ? 0.3 : 1 }}
-                                onMouseEnter={() => setHoveredIdx(idx)} onMouseLeave={() => setHoveredIdx(null)} />
-                            )}
-                          </g>
-                        );
-                      });
-                    })()}
+                          return (
+                            <g key={cat.id} className="group">
+                              {isFullCircle ? (
+                                <circle cx={center} cy={center} r={radius} fill="none" stroke={colors[idx % colors.length]} strokeWidth={strokeWidth} 
+                                  className="transition-all duration-300 cursor-pointer origin-center"
+                                  style={{ transform: isHovered ? 'scale(1.05)' : 'scale(1)', opacity: (hoveredIdx !== null && !isHovered) ? 0.3 : 1 }}
+                                  onMouseEnter={() => setHoveredIdx(idx)} onMouseLeave={() => setHoveredIdx(null)} />
+                              ) : (
+                                <path d={pathData} fill="none" stroke={colors[idx % colors.length]} strokeWidth={strokeWidth}
+                                  className="transition-all duration-300 cursor-pointer origin-center"
+                                  style={{ transform: isHovered ? 'scale(1.05)' : 'scale(1)', opacity: (hoveredIdx !== null && !isHovered) ? 0.3 : 1 }}
+                                  onMouseEnter={() => setHoveredIdx(idx)} onMouseLeave={() => setHoveredIdx(null)} />
+                              )}
+                            </g>
+                          );
+                        });
+                      })()}
+                    </g>
                     <g className="pointer-events-none">
                       <text x={center} y={center - 5} textAnchor="middle" className="text-[9px] font-black text-slate-400 fill-slate-400 uppercase tracking-widest">
                         Total
@@ -876,7 +897,7 @@ const ClinicAnalytics: React.FC<ClinicAnalyticsProps> = ({ history }) => {
                     transform: `translate3d(${mousePos.x}px, ${mousePos.y}px, 0) translate(-50%, -115%)`
                   }}
                 >
-                  <div className="bg-white border border-slate-110 rounded-[1.25rem] p-4 flex flex-col items-center text-center min-w-[130px] shadow-sm">
+                  <div className="bg-white border border-slate-111 rounded-[1.25rem] p-4 flex flex-col items-center text-center min-w-[130px] shadow-sm">
                     <span className="text-[9px] font-black text-slate-400 leading-none mb-1.5 tracking-widest">{currentBreakdown[hoveredIdx].label}</span>
                     <span className="text-sm font-black text-slate-800 leading-none mb-1.5">
                       {isReorderReport ? `${currentBreakdown[hoveredIdx].amount.toLocaleString()} Reorders` : (isQuantityReport ? `${currentBreakdown[hoveredIdx].amount.toLocaleString()} Units` : `$${currentBreakdown[hoveredIdx].amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
