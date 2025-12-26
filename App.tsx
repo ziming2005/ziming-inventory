@@ -8,7 +8,26 @@ import ClinicMap from './ClinicMap';
 import RoomModal from './RoomModal';
 import LandingModal from './LandingModal';
 import ProfilePage from './ProfilePage';
+import AdminDashboard from './AdminDashboard';
 import { supabase } from './supabaseClient';
+
+type ManagedInventory = {
+  userId: string;
+  rooms: Room[];
+  history: PurchaseHistory[];
+  logs: ActivityLog[];
+  blueprint?: string | null;
+};
+
+type ProfileRow = {
+  user_id: string;
+  email: string;
+  name: string | null;
+  account_type: string | null;
+  phone?: string | null;
+  position?: string | null;
+  company_name?: string | null;
+};
 
 const App: React.FC = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -22,6 +41,11 @@ const App: React.FC = () => {
   const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
   const [inventoryId, setInventoryId] = useState<string | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [managedProfiles, setManagedProfiles] = useState<ProfileRow[]>([]);
+  const [managedInventories, setManagedInventories] = useState<ManagedInventory[]>([]);
+  const [adminDataLoading, setAdminDataLoading] = useState<boolean>(false);
+  const [adminDataError, setAdminDataError] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<'dashboard' | 'profile'>('dashboard');
 
   const [isLocked, setIsLocked] = useState(false);
@@ -44,6 +68,10 @@ const App: React.FC = () => {
       } else {
         setIsAuthenticated(false);
         setSupabaseUserId(null);
+        setIsAdmin(false);
+        setManagedProfiles([]);
+        setManagedInventories([]);
+        setAdminDataError(null);
         setUser(null);
         setRooms([]);
         setHistory([]);
@@ -55,6 +83,40 @@ const App: React.FC = () => {
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  const fetchAdminData = async (force = false) => {
+    if (!force && !isAdmin) return;
+    setAdminDataLoading(true);
+    setAdminDataError(null);
+    try {
+      const { data: profiles, error: profileError } = await supabase.from('profiles').select('*');
+      if (profileError) {
+        console.error('Admin profiles fetch error', profileError);
+        setAdminDataError('Failed to load profiles. Please retry.');
+      } else {
+        setManagedProfiles(profiles || []);
+      }
+
+      const { data: inventories, error: inventoryError } = await supabase
+        .from('inventories')
+        .select('user_id, data, blueprint');
+      if (inventoryError) {
+        console.error('Admin inventory fetch error', inventoryError);
+        setAdminDataError('Failed to load inventories. Please retry.');
+      } else {
+        const prepared: ManagedInventory[] = (inventories || []).map((inv: any) => ({
+          userId: inv.user_id,
+          rooms: inv.data?.rooms || [],
+          history: inv.data?.history || [],
+          logs: inv.data?.logs || [],
+          blueprint: inv.data?.blueprint || inv.blueprint || PRESET_BLUEPRINTS[0].url
+        }));
+        setManagedInventories(prepared);
+      }
+    } finally {
+      setAdminDataLoading(false);
+    }
+  };
 
   const bootstrapUser = async (userId: string) => {
     setIsBootstrapped(false);
@@ -97,14 +159,23 @@ const App: React.FC = () => {
       }
     }
 
-    if (finalProfile) {
+    const accountTypeValue = (finalProfile?.account_type as any) || (authUser.user?.user_metadata?.account_type as any) || 'individual';
+    const profileSource = finalProfile || (authUser.user ? {
+      name: authUser.user.user_metadata?.name || authUser.user.email || 'User',
+      email: authUser.user.email || '',
+      phone: authUser.user.user_metadata?.phone || '',
+      position: authUser.user.user_metadata?.position || '',
+      companyName: authUser.user.user_metadata?.company_name || undefined
+    } : null);
+
+    if (profileSource) {
       setUser({
-        name: finalProfile.name || 'User',
-        email: finalProfile.email,
-        accountType: finalProfile.account_type,
-        phone: finalProfile.phone || '',
-        position: finalProfile.position || '',
-        companyName: finalProfile.company_name || undefined
+        name: profileSource.name || 'User',
+        email: profileSource.email,
+        accountType: accountTypeValue as any,
+        phone: (profileSource as any).phone || '',
+        position: (profileSource as any).position || '',
+        companyName: (profileSource as any).companyName || (profileSource as any).company_name || undefined
       });
     }
 
@@ -134,11 +205,16 @@ const App: React.FC = () => {
       setBlueprint(PRESET_BLUEPRINTS[0].url);
     }
 
-    if (finalProfile) {
-      setIsAuthenticated(true);
+    const isUserAdmin = accountTypeValue === 'admin';
+    setIsAdmin(isUserAdmin);
+    if (isUserAdmin) {
+      await fetchAdminData(true);
     } else {
-      setIsAuthenticated(false);
+      setManagedProfiles([]);
+      setManagedInventories([]);
     }
+
+    setIsAuthenticated(!!authUser.user);
     setIsBootstrapped(true);
   };
 
@@ -147,6 +223,7 @@ const App: React.FC = () => {
     const userId = userData.user?.id || null;
     if (userId) setSupabaseUserId(userId);
 
+    setIsAdmin(userProfile.accountType === 'admin');
     setUser(userProfile);
     setIsAuthenticated(true);
     setCurrentView('dashboard');
@@ -170,6 +247,11 @@ const App: React.FC = () => {
     setIsAuthenticated(false);
     setIsBootstrapped(false);
     setUser(null);
+    setIsAdmin(false);
+    setManagedProfiles([]);
+    setManagedInventories([]);
+    setAdminDataError(null);
+    setAdminDataLoading(false);
     setCurrentView('dashboard');
     setRooms([]);
     setHistory([]);
@@ -339,12 +421,33 @@ const App: React.FC = () => {
       }
     };
     if (isAuthenticated && isBootstrapped) {
+      if (isAdmin) return;
       sync();
     }
-  }, [rooms, history, logs, blueprint, isAuthenticated, isBootstrapped, supabaseUserId, inventoryId]);
+  }, [rooms, history, logs, blueprint, isAuthenticated, isBootstrapped, supabaseUserId, inventoryId, isAdmin]);
+
+  const adminRooms = useMemo(() => managedInventories.flatMap((inv) => inv.rooms || []), [managedInventories]);
+  const adminHistory = useMemo(() => managedInventories.flatMap((inv) => inv.history || []), [managedInventories]);
 
   if (!isAuthenticated) {
     return <LandingModal onLogin={handleLogin} />;
+  }
+
+  if (isAuthenticated && isAdmin && user) {
+    return (
+      <AdminDashboard 
+        user={user} 
+        rooms={adminRooms} 
+        history={adminHistory} 
+        onLogout={handleLogout} 
+        onSwitchToClinic={() => {}} 
+        managedProfiles={managedProfiles}
+        managedInventories={managedInventories}
+        adminLoading={adminDataLoading}
+        adminError={adminDataError}
+        onRefreshAdminData={() => fetchAdminData(true)}
+      />
+    );
   }
 
   return (

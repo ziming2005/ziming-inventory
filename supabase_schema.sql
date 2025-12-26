@@ -4,7 +4,7 @@ create table if not exists public.profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   email text not null unique,
   name text,
-  account_type text check (account_type in ('individual','company')),
+  account_type text check (account_type in ('individual','company','admin')),
   phone text,
   position text,
   company_name text,
@@ -46,6 +46,8 @@ create policy "Profiles are insertable by owners" on public.profiles
   for insert with check (auth.uid() = user_id);
 create policy "Profiles are updatable by owners" on public.profiles
   for update using (auth.uid() = user_id);
+create policy "Profiles are readable by admins" on public.profiles
+  for select using ((current_setting('request.jwt.claims', true)::jsonb #>> '{user_metadata,account_type}') = 'admin');
 
 create policy "Inventories are readable by owners" on public.inventories
   for select using (auth.uid() = user_id);
@@ -53,3 +55,5 @@ create policy "Inventories are insertable by owners" on public.inventories
   for insert with check (auth.uid() = user_id);
 create policy "Inventories are updatable by owners" on public.inventories
   for update using (auth.uid() = user_id);
+create policy "Inventories are readable by admins" on public.inventories
+  for select using ((current_setting('request.jwt.claims', true)::jsonb #>> '{user_metadata,account_type}') = 'admin');

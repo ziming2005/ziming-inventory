@@ -101,10 +101,11 @@ const LandingModal: React.FC<LandingModalProps> = ({ onLogin }) => {
         if (error) throw error;
 
         if (data.user) {
+          const inferredAccountType = (data.user.user_metadata?.account_type as any) || (email.trim().toLowerCase() === 'admin123@gmail.com' ? 'admin' : 'individual');
           const profile: UserProfile = {
             name: data.user.user_metadata?.name || data.user.email || 'User',
             email: data.user.email || email.trim(),
-            accountType: (data.user.user_metadata?.account_type as any) || 'individual',
+            accountType: inferredAccountType,
             phone: data.user.user_metadata?.phone || '',
             position: data.user.user_metadata?.position || '',
             companyName: data.user.user_metadata?.company_name,

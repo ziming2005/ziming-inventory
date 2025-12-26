@@ -52,7 +52,7 @@ export interface PurchaseHistory {
 export interface UserProfile {
   name: string;
   email: string;
-  accountType: 'individual' | 'company';
+  accountType: 'individual' | 'company' | 'admin';
   phone: string;
   position: string;
   companyName?: string;
