@@ -9,7 +9,6 @@ import RoomModal from './RoomModal';
 import LandingModal from './LandingModal';
 import ProfilePage from './ProfilePage';
 import { supabase } from './supabaseClient';
-import QrIntakeForm from './QrIntakeForm';
 
 const App: React.FC = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -23,8 +22,7 @@ const App: React.FC = () => {
   const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
   const [inventoryId, setInventoryId] = useState<string | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [currentView, setCurrentView] = useState<'dashboard' | 'profile' | 'qrIntake'>('dashboard');
-  const [qrIntakeRequested, setQrIntakeRequested] = useState<boolean>(false);
+  const [currentView, setCurrentView] = useState<'dashboard' | 'profile'>('dashboard');
 
   const [isLocked, setIsLocked] = useState(false);
   const [isAddMode, setIsAddMode] = useState(false);
@@ -32,8 +30,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const fetchSession = async () => {
-      const hasQr = new URLSearchParams(window.location.search).get('qr_intake') === '1';
-      setQrIntakeRequested(hasQr);
       const { data } = await supabase.auth.getSession();
       if (data.session?.user) {
         await bootstrapUser(data.session.user.id);
@@ -140,9 +136,6 @@ const App: React.FC = () => {
 
     if (finalProfile) {
       setIsAuthenticated(true);
-      if (qrIntakeRequested) {
-        setCurrentView('qrIntake');
-      }
     } else {
       setIsAuthenticated(false);
     }
@@ -156,7 +149,7 @@ const App: React.FC = () => {
 
     setUser(userProfile);
     setIsAuthenticated(true);
-    setCurrentView(qrIntakeRequested ? 'qrIntake' : 'dashboard');
+    setCurrentView('dashboard');
     if (userId) {
       const { error } = await supabase.from('profiles').upsert({
         user_id: userId,
@@ -197,14 +190,17 @@ const App: React.FC = () => {
 
   const addActivity = (roomId: number, roomName: string, action: ActivityLog['action'], details: string) => {
     const newLog: ActivityLog = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       timestamp: new Date().toISOString(),
       roomId,
       roomName,
       action,
       details
     };
-    setLogs(prev => [newLog, ...prev].slice(0, 100));
+    setLogs(prev => {
+      if (prev.some(l => l.id === newLog.id)) return prev;
+      return [newLog, ...prev].slice(0, 100);
+    });
   };
 
   const receiveStock = (roomId: number, itemData: Partial<Item>, qty: number, price: number, expiry?: string) => {
@@ -238,12 +234,32 @@ const App: React.FC = () => {
       addActivity(roomId, room.name, 'receive', `Received ${qty} ${itemData.uom || 'pcs'} of "${itemData.name}" [${itemData.code || 'N/A'}] @ $${price.toFixed(2)}`);
       
       const historyEntry: PurchaseHistory = {
-        id: Date.now(), timestamp: new Date().toISOString(), productName: itemData.name || '',
-        brand: itemData.brand || '', code: itemData.code || '', vendor: itemData.vendor || '',
-        qty, unitPrice: price, totalPrice: qty * price, location: room.name, category: itemData.category || 'other',
-        roomId: room.id, expiryDate: expiry
+        id: crypto.randomUUID() as any,
+        timestamp: new Date().toISOString(),
+        productName: itemData.name || '',
+        brand: itemData.brand || '',
+        code: itemData.code || '',
+        vendor: itemData.vendor || '',
+        qty,
+        unitPrice: price,
+        totalPrice: qty * price,
+        location: room.name,
+        category: itemData.category || 'other',
+        roomId: room.id,
+        expiryDate: expiry
       };
-      setHistory(h => [historyEntry, ...h]);
+      setHistory(h => {
+        const duplicate = h.some(
+          entry =>
+            entry.id === historyEntry.id ||
+            (entry.productName === historyEntry.productName &&
+              entry.roomId === historyEntry.roomId &&
+              entry.qty === historyEntry.qty &&
+              entry.unitPrice === historyEntry.unitPrice &&
+              entry.timestamp === historyEntry.timestamp)
+        );
+        return duplicate ? h : [historyEntry, ...h];
+      });
       return { ...room, items: updatedItems };
     }));
   };
@@ -262,6 +278,18 @@ const App: React.FC = () => {
           return { ...i, quantity: newQty };
         })
       };
+    }));
+  };
+
+  const deleteItem = (roomId: number, itemId: number) => {
+    setRooms(prev => prev.map(r => {
+      if (r.id !== roomId) return r;
+      const item = r.items.find(i => i.id === itemId);
+      const updated = r.items.filter(i => i.id !== itemId);
+      if (item) {
+        addActivity(roomId, r.name, 'delete', `Deleted "${item.name}"`);
+      }
+      return { ...r, items: updated };
     }));
   };
 
@@ -291,7 +319,9 @@ const App: React.FC = () => {
     const sync = async () => {
       const userId = supabaseUserId;
       if (!userId) return;
-      const payload = { rooms, history, logs, blueprint };
+      const uniqueLogs = Array.from(new Map(logs.map(l => [l.id, l])).values());
+      const uniqueHistory = Array.from(new Map(history.map(h => [h.id, h])).values());
+      const payload = { rooms, history: uniqueHistory, logs: uniqueLogs, blueprint };
       const record: any = { user_id: userId, data: payload, blueprint };
 
       if (inventoryId) record.id = inventoryId;
@@ -317,16 +347,6 @@ const App: React.FC = () => {
     return <LandingModal onLogin={handleLogin} />;
   }
 
-  if (currentView === 'qrIntake') {
-    return (
-      <QrIntakeForm
-        rooms={rooms}
-        onReceive={receiveStock}
-        onBack={() => setCurrentView('dashboard')}
-      />
-    );
-  }
-
   return (
     <div className="min-h-screen flex flex-col select-none bg-slate-50">
       <Header 
@@ -335,7 +355,7 @@ const App: React.FC = () => {
         userInitials={userInitials}
       />
 
-      <div className="max-w-[1600px] mx-auto w-full flex flex-col gap-8 px-6 md:px-16 py-8">
+      <div className="max-w-[1600px] mx-auto w-full flex flex-col gap-8 px-6 md:px-16 lg:px-32 py-8">
         <main className="flex-1 flex flex-col gap-8">
           {currentView === 'dashboard' ? (
             <>
@@ -359,7 +379,6 @@ const App: React.FC = () => {
                 rooms={rooms} 
                 history={history} 
                 logs={logs}
-                supabaseUserId={supabaseUserId}
                 onReceive={receiveStock}
                 onUpdateQty={updateItemQty}
                 onTransfer={moveItem}
@@ -387,6 +406,7 @@ const App: React.FC = () => {
           onReceive={receiveStock}
           onUpdateQty={updateItemQty}
           onTransfer={moveItem}
+          onDeleteItem={deleteItem}
         />
       )}
     </div>

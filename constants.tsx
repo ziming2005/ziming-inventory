@@ -26,15 +26,33 @@ export const CATEGORY_ORDER = ['consumables', 'equipment', 'instruments', 'mater
 
 export const PRESET_BLUEPRINTS = [
   { 
-    id: 'clinical-hub', 
-    name: 'Clinical Tech Hub', 
-    url: 'https://imagine-public.x.ai/imagine-public/images/d853cd8b-d002-4f16-bc81-edaadbc61903.png',
+    id: 'template-1', 
+    name: 'Clinical 1', 
+    url: '/images/template1.png',
     description: 'Advanced blue laboratory aesthetic'
   },
   { 
-    id: 'metropolis-precinct', 
-    name: 'Metropolis Precinct', 
-    url: 'https://imagine-public.x.ai/imagine-public/images/79826e87-c496-4e19-b299-c285cb6991ef.png?cache=1&dl=1',
+    id: 'template-2', 
+    name: 'Clinical 2', 
+    url: '/images/template2.png',
     description: 'Wide isometric city-clinic layout' 
+  },
+  { 
+    id: 'template-3', 
+    name: 'Clinical 3', 
+    url: '/images/template3.png',
+    description: 'Alternate clinic layout' 
+  },
+  { 
+    id: 'template-4', 
+    name: 'Clinical 4', 
+    url: '/images/template4.png',
+    description: 'High-density treatment layout' 
+  },
+  { 
+    id: 'template-5', 
+    name: 'Clinical 5', 
+    url: '/images/template5.png',
+    description: 'Open concept clinic floor' 
   },
 ];

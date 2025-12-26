@@ -22,9 +22,10 @@ interface RoomModalProps {
   onReceive: (roomId: number, itemData: Partial<Item>, qty: number, price: number, expiry?: string) => void;
   onUpdateQty: (roomId: number, itemId: number, delta: number) => void;
   onTransfer: (fromRoomId: number, toRoomId: number, itemId: number) => void;
+  onDeleteItem: (roomId: number, itemId: number) => void;
 }
 
-const RoomModal: React.FC<RoomModalProps> = ({ room, allRooms, logs, onClose, onUpdateName, onReceive, onUpdateQty, onTransfer }) => {
+const RoomModal: React.FC<RoomModalProps> = ({ room, allRooms, logs, onClose, onUpdateName, onReceive, onUpdateQty, onTransfer, onDeleteItem }) => {
   const [isReceiving, setIsReceiving] = useState(false);
   const [receiveMode, setReceiveMode] = useState<'existing' | 'new'>('existing');
   const [selectedItemIdx, setSelectedItemIdx] = useState<string>('');
@@ -274,7 +275,7 @@ const RoomModal: React.FC<RoomModalProps> = ({ room, allRooms, logs, onClose, on
                             <td className="px-3 py-3 font-bold text-[#4d9678] tracking-tight whitespace-nowrap">${(item.quantity * item.price).toFixed(2)}</td>
                             <td className="px-3 py-3 text-slate-400 text-[10px] whitespace-nowrap overflow-hidden text-ellipsis">{item.vendor || '-'}</td>
                             <td className="px-3 py-3">
-                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{item.category}</span>
+                              <span className="text-[9px] font-bold text-slate-400 capitalize tracking-wider">{item.category}</span>
                             </td>
                             <td className={`px-3 py-3 whitespace-nowrap ${isExpired ? 'bg-rose-50' : ''}`}>
                               {item.expiryDate ? (
@@ -285,7 +286,7 @@ const RoomModal: React.FC<RoomModalProps> = ({ room, allRooms, logs, onClose, on
                               ) : '-'}
                             </td>
                             <td className="px-3 py-3">
-                              <select className="bg-transparent text-[10px] font-bold text-emerald-600 uppercase tracking-tighter focus:outline-none cursor-pointer w-full text-ellipsis" value={room.id} onChange={(e) => onTransfer(room.id, Number(e.target.value), item.id)}>
+                              <select className="bg-transparent text-[10px] font-bold text-emerald-600 tracking-tighter focus:outline-none cursor-pointer w-full text-ellipsis" value={room.id} onChange={(e) => onTransfer(room.id, Number(e.target.value), item.id)}>
                                 <option value={room.id}>{room.name}</option>
                                 {allRooms.filter(r => r.id !== room.id).map(r => (
                                   <option key={r.id} value={r.id}>{r.name}</option>
@@ -293,7 +294,13 @@ const RoomModal: React.FC<RoomModalProps> = ({ room, allRooms, logs, onClose, on
                               </select>
                             </td>
                             <td className="px-3 py-3 text-center">
-                               <button className="text-slate-200 hover:text-rose-500 transition-colors"><Trash2 className="w-4 h-4 mx-auto" /></button>
+                               <button
+                                 onClick={() => onDeleteItem(room.id, item.id)}
+                                 className="text-slate-300 hover:text-rose-600 transition-colors"
+                                 title="Delete item"
+                               >
+                                 <Trash2 className="w-4 h-4 mx-auto" />
+                               </button>
                             </td>
                           </tr>
                         );
