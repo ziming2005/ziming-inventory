@@ -103,7 +103,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, [managedProfiles, user]);
 
   // States for interactive charts
-  const [categoryMetric, setCategoryMetric] = useState<'value' | 'quantity'>('quantity');
+  const [categoryMetric, setCategoryMetric] = useState<'value' | 'quantity'>('value');
   const [vendorCategoryFilter, setVendorCategoryFilter] = useState('All');
   
   // Category chart tooltip state
@@ -312,6 +312,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const renderCategoryChart = () => {
+    const computeNiceSteps = (maxValue: number) => {
+      if (!isFinite(maxValue) || maxValue <= 0) return [0, 1, 2, 3, 4];
+      const roughStep = maxValue / 4;
+      const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+      const residual = roughStep / magnitude;
+      let niceResidual;
+      if (residual <= 1) niceResidual = 1;
+      else if (residual <= 2) niceResidual = 2;
+      else if (residual <= 5) niceResidual = 5;
+      else niceResidual = 10;
+      const step = niceResidual * magnitude;
+      const steps = [0, step, step * 2, step * 3, step * 4];
+      const top = steps[steps.length - 1];
+      if (top < maxValue) steps.push(step * 5);
+      return steps;
+    };
+
     const width = 800;
     const height = 400;
     const paddingLeft = 60;
@@ -322,7 +339,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const chartHeight = height - paddingTop - paddingBottom;
     
     const isValue = categoryMetric === 'value';
-    const displayYSteps = isValue ? [0, 1500, 3000, 4500, 6000] : [0, 15, 30, 45, 60];
+    const maxAxisValue = Math.max(...categoryBreakdownData.map(cat => isValue ? cat.value : cat.quantity), 0);
+    const displayYSteps = computeNiceSteps(maxAxisValue || (isValue ? 100 : 10));
+    const yTop = displayYSteps[displayYSteps.length - 1] || 1;
     
     const barWidth = 70;
     const gap = (chartWidth - (categoryBreakdownData.length * barWidth)) / (categoryBreakdownData.length + 1);
@@ -348,7 +367,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           className="overflow-visible"
         >
           {displayYSteps.map((step) => {
-            const y = height - paddingBottom - (step / (isValue ? 6000 : 60)) * chartHeight;
+            const y = height - paddingBottom - (step / yTop) * chartHeight;
             return (
               <g key={step}>
                 <line x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y} stroke="#f1f5f9" strokeWidth="1.5" strokeDasharray="6 4" />
@@ -359,7 +378,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           {categoryBreakdownData.map((cat, i) => {
             const val = isValue ? cat.value : cat.quantity;
-            const barHeight = Math.min((val / (isValue ? 6000 : 60)) * chartHeight, chartHeight);
+            const barHeight = Math.min((val / yTop) * chartHeight, chartHeight);
             const xPos = paddingLeft + gap + (i * (barWidth + gap));
             const yPos = height - paddingBottom - barHeight;
 

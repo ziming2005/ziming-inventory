@@ -71,7 +71,7 @@ const InventorySection: React.FC<InventorySectionProps> = ({
                 <th className="px-6 py-4">Vendor</th>
                 <th className="px-6 py-4">Category</th>
                 <th className="px-6 py-4">Expires</th>
-                <th className="px-6 py-4">Clinic Location</th>
+                <th className="px-6 py-4">Room Location</th>
               </tr>
             </thead>
             <tbody className="bg-white">
@@ -98,7 +98,7 @@ const InventorySection: React.FC<InventorySectionProps> = ({
                         <td className={`px-6 py-4 font-bold ${new Date(item.expiryDate) < new Date() ? 'text-rose-600' : 'text-slate-500'}`}>
                           {item.expiryDate}
                         </td>
-                        <td className="px-6 py-4 text-slate-500 font-medium italic">{item.clinic}</td>
+                        <td className="px-6 py-4 text-slate-500 font-medium italic">{item.location}</td>
                       </tr>
                     ))}
                   </React.Fragment>

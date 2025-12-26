@@ -41,8 +41,8 @@ const CAT_QUOTES = [
   "Did someone say... Tuna paste?"
 ];
 
-// High-quality static meow sound
-const MEOW_SOUND_URL = "/images/cat-meow.mp3";
+// High-quality static meow sound (respect base path for GH Pages / subfolders)
+const MEOW_SOUND_URL = `${import.meta.env.BASE_URL || '/'}images/cat-meow.mp3`;
 
 // Walking configuration
 const CAT_SPEED = 0.08; // Seconds per % of distance
