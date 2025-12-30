@@ -81,16 +81,22 @@ const ClinicAnalytics: React.FC<ClinicAnalyticsProps> = ({ history }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Top Vendors Logic for Filtering
+  const normalizeKey = (value: string | null | undefined, fallback: string) => {
+    const key = (value || '').trim().toLowerCase();
+    return key || fallback.toLowerCase();
+  };
+
+  // Top Vendors Logic for Filtering (case-insensitive aggregation)
   const topVendorsForFilter = useMemo(() => {
-    const vendorMap: Record<string, number> = {};
+    const vendorMap: Record<string, { amount: number; label: string }> = {};
     history.forEach(h => {
-      const v = h.vendor || 'Unknown';
-      vendorMap[v] = (vendorMap[v] || 0) + h.totalPrice;
+      const norm = normalizeKey(h.vendor, 'Unknown Vendor');
+      if (!vendorMap[norm]) vendorMap[norm] = { amount: 0, label: h.vendor || 'Unknown Vendor' };
+      vendorMap[norm].amount += h.totalPrice;
     });
 
     const sortedVendors = Object.entries(vendorMap)
-      .map(([name, spend]) => ({ name, spend }))
+      .map(([_, { amount, label }]) => ({ name: label, spend: amount }))
       .sort((a, b) => b.spend - a.spend);
 
     const top5 = sortedVendors.slice(0, 5).map(v => v.name);
@@ -139,18 +145,19 @@ const ClinicAnalytics: React.FC<ClinicAnalyticsProps> = ({ history }) => {
     }).sort((a, b) => b.amount - a.amount);
 
     // Vendor Breakdown
-    const vendorMap: Record<string, { amount: number; count: number }> = {};
+    const vendorMap: Record<string, { amount: number; count: number; label: string }> = {};
     distributionHistory.forEach(h => {
-      const vName = h.vendor || 'Unknown Vendor';
-      if (!vendorMap[vName]) vendorMap[vName] = { amount: 0, count: 0 };
-      vendorMap[vName].amount += h.totalPrice;
-      vendorMap[vName].count += 1;
+      const norm = normalizeKey(h.vendor, 'Unknown Vendor');
+      const displayLabel = h.vendor || 'Unknown Vendor';
+      if (!vendorMap[norm]) vendorMap[norm] = { amount: 0, count: 0, label: displayLabel };
+      vendorMap[norm].amount += h.totalPrice;
+      vendorMap[norm].count += 1;
     });
 
     const vendorSortedList = Object.entries(vendorMap)
-      .map(([name, stats]) => ({
-        id: name,
-        label: name,
+      .map(([id, stats]) => ({
+        id,
+        label: stats.label,
         amount: stats.amount,
         count: stats.count,
         totalSpent: stats.amount,
@@ -172,19 +179,20 @@ const ClinicAnalytics: React.FC<ClinicAnalyticsProps> = ({ history }) => {
       : vendorSortedList;
 
     // Product Consumption Breakdown
-    const productMap: Record<string, { qty: number; count: number; totalSpent: number }> = {};
+    const productMap: Record<string, { qty: number; count: number; totalSpent: number; label: string }> = {};
     distributionHistory.forEach(h => {
-      const pName = h.productName;
-      if (!productMap[pName]) productMap[pName] = { qty: 0, count: 0, totalSpent: 0 };
-      productMap[pName].qty += h.qty;
-      productMap[pName].count += 1;
-      productMap[pName].totalSpent += h.totalPrice;
+      const norm = normalizeKey(h.productName, 'Unknown Product');
+      const displayLabel = h.productName || 'Unknown Product';
+      if (!productMap[norm]) productMap[norm] = { qty: 0, count: 0, totalSpent: 0, label: displayLabel };
+      productMap[norm].qty += h.qty;
+      productMap[norm].count += 1;
+      productMap[norm].totalSpent += h.totalPrice;
     });
 
     const productSortedList = Object.entries(productMap)
-      .map(([name, stats]) => ({
-        id: name,
-        label: name,
+      .map(([id, stats]) => ({
+        id,
+        label: stats.label,
         amount: stats.qty,
         count: stats.count,
         totalSpent: stats.totalSpent,

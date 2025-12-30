@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Room, Item, ActivityLog, PurchaseHistory, UserProfile } from './types';
+import { Room, Item, ActivityLog, PurchaseHistory, UserProfile, ItemBatch } from './types';
 import { PRESET_BLUEPRINTS } from './constants';
 import MasterInventory from './MasterInventory';
 import Header from './Header';
@@ -27,6 +27,76 @@ type ProfileRow = {
   phone?: string | null;
   position?: string | null;
   company_name?: string | null;
+};
+
+const summarizeBatches = (batches: ItemBatch[]) => {
+  const totalQty = batches.reduce((sum, b) => sum + b.qty, 0);
+  const totalValue = batches.reduce((sum, b) => sum + (b.qty * b.unitPrice), 0);
+  const avgPrice = totalQty > 0 ? totalValue / totalQty : 0;
+  const expiryTimes = batches
+    .map(b => b.expiryDate ? new Date(b.expiryDate).getTime() : null)
+    .filter((v): v is number => v !== null);
+  const earliestExpiry = expiryTimes.length ? new Date(Math.min(...expiryTimes)).toISOString().split('T')[0] : null;
+  return { totalQty, avgPrice, earliestExpiry };
+};
+
+const ensureBatches = (item: Item): Item => {
+  const baseBatches = item.batches && item.batches.length > 0
+    ? item.batches.map(b => ({ ...b }))
+    : [{
+        qty: item.quantity,
+        unitPrice: item.price,
+        expiryDate: item.expiryDate || null
+      }];
+  const { totalQty, avgPrice, earliestExpiry } = summarizeBatches(baseBatches);
+  return {
+    ...item,
+    batches: baseBatches,
+    quantity: totalQty,
+    price: avgPrice,
+    expiryDate: earliestExpiry
+  };
+};
+
+const normalizeRooms = (rooms: Room[]) => rooms.map(room => ({
+  ...room,
+  items: room.items.map(ensureBatches)
+}));
+
+const mergeBatchAdd = (item: Item, qty: number, price: number, expiry?: string) => {
+  const normalized = ensureBatches(item);
+  const batches = normalized.batches ? [...normalized.batches] : [];
+  const key = expiry || null;
+  const idx = batches.findIndex(b => (b.expiryDate || null) === key);
+  if (idx >= 0) {
+    const b = batches[idx];
+    const newQty = b.qty + qty;
+    const newPrice = newQty > 0 ? ((b.qty * b.unitPrice) + (qty * price)) / newQty : price;
+    batches[idx] = { ...b, qty: newQty, unitPrice: newPrice, expiryDate: key };
+  } else {
+    batches.push({ qty, unitPrice: price, expiryDate: key });
+  }
+  const { totalQty, avgPrice, earliestExpiry } = summarizeBatches(batches);
+  return { ...normalized, batches, quantity: totalQty, price: avgPrice, expiryDate: earliestExpiry };
+};
+
+const adjustBatchesWithDelta = (item: Item, delta: number) => {
+  const normalized = ensureBatches(item);
+  let batches = normalized.batches ? normalized.batches.map(b => ({ ...b })) : [];
+  if (delta > 0) {
+    if (batches.length === 0) batches.push({ qty: 0, unitPrice: normalized.price, expiryDate: normalized.expiryDate || null });
+    batches[0].qty += delta;
+  } else if (delta < 0) {
+    let remaining = Math.abs(delta);
+    for (let i = batches.length - 1; i >= 0 && remaining > 0; i--) {
+      const take = Math.min(batches[i].qty, remaining);
+      batches[i].qty -= take;
+      remaining -= take;
+    }
+    batches = batches.filter(b => b.qty > 0);
+  }
+  const { totalQty, avgPrice, earliestExpiry } = summarizeBatches(batches);
+  return { ...normalized, batches, quantity: totalQty, price: avgPrice, expiryDate: earliestExpiry };
 };
 
 const App: React.FC = () => {
@@ -194,7 +264,7 @@ const App: React.FC = () => {
     if (inventory?.data) {
       if ((inventory as any).id) setInventoryId((inventory as any).id);
       const invData = (inventory as any).data || {};
-      setRooms(invData.rooms || []);
+      setRooms(normalizeRooms(invData.rooms || []));
       setHistory(invData.history || []);
       setLogs(invData.logs || []);
       setBlueprint(invData.blueprint || (inventory as any).blueprint || PRESET_BLUEPRINTS[0].url);
@@ -271,21 +341,28 @@ const App: React.FC = () => {
     setRooms(prev => prev.map(r => r.id === id ? { ...r, name } : r));
 
   const addActivity = (roomId: number, roomName: string, action: ActivityLog['action'], details: string) => {
+    const timestamp = new Date().toISOString();
     const newLog: ActivityLog = {
       id: crypto.randomUUID(),
-      timestamp: new Date().toISOString(),
+      timestamp,
       roomId,
       roomName,
       action,
       details
     };
     setLogs(prev => {
-      if (prev.some(l => l.id === newLog.id)) return prev;
+      const isDuplicate = prev.some(l => 
+        l.action === action &&
+        l.roomId === roomId &&
+        l.details === details &&
+        Math.abs(new Date(l.timestamp).getTime() - new Date(timestamp).getTime()) < 1500 // within 1.5s
+      );
+      if (isDuplicate) return prev;
       return [newLog, ...prev].slice(0, 100);
     });
   };
 
-  const receiveStock = (roomId: number, itemData: Partial<Item>, qty: number, price: number, expiry?: string) => {
+  const receiveStock = (roomId: number, itemData: Partial<Item>, qty: number, price: number, purchaseDate: string, expiry?: string) => {
     setRooms(prev => prev.map(room => {
       if (room.id !== roomId) return room;
       const existingItem = room.items.find(i => 
@@ -294,9 +371,8 @@ const App: React.FC = () => {
       );
       let updatedItems;
       if (existingItem) {
-        const totalQty = existingItem.quantity + qty;
-        const avgPrice = ((existingItem.quantity * existingItem.price) + (qty * price)) / totalQty;
-        updatedItems = room.items.map(i => i.id === existingItem.id ? { ...i, quantity: totalQty, price: avgPrice, expiryDate: expiry || i.expiryDate } : i);
+        const merged = mergeBatchAdd(existingItem, qty, price, expiry);
+        updatedItems = room.items.map(i => i.id === existingItem.id ? merged : i);
       } else {
         const newItem: Item = {
           id: Date.now(),
@@ -309,15 +385,21 @@ const App: React.FC = () => {
           vendor: itemData.vendor || '',
           category: itemData.category || 'other',
           description: itemData.description || '',
-          expiryDate: expiry
+          expiryDate: expiry || null,
+          batches: [{
+            qty,
+            unitPrice: price,
+            expiryDate: expiry || null
+          }]
         };
         updatedItems = [...room.items, newItem];
       }
       addActivity(roomId, room.name, 'receive', `Received ${qty} ${itemData.uom || 'pcs'} of "${itemData.name}" [${itemData.code || 'N/A'}] @ $${price.toFixed(2)}`);
       
+      const historyTimestamp = purchaseDate ? new Date(`${purchaseDate}T00:00:00`).toISOString() : new Date().toISOString();
       const historyEntry: PurchaseHistory = {
         id: crypto.randomUUID() as any,
-        timestamp: new Date().toISOString(),
+        timestamp: historyTimestamp,
         productName: itemData.name || '',
         brand: itemData.brand || '',
         code: itemData.code || '',
@@ -328,6 +410,7 @@ const App: React.FC = () => {
         location: room.name,
         category: itemData.category || 'other',
         roomId: room.id,
+        uom: itemData.uom || existingItem?.uom || 'pcs',
         expiryDate: expiry
       };
       setHistory(h => {
@@ -353,11 +436,36 @@ const App: React.FC = () => {
         ...r,
         items: r.items.map(i => {
           if (i.id !== itemId) return i;
-          const newQty = Math.max(0, i.quantity + delta);
-          if (newQty !== i.quantity) {
-             addActivity(roomId, r.name, 'edit', `Adjusted qty of "${i.name}" to ${newQty}`);
+          const adjusted = adjustBatchesWithDelta(i, delta);
+          if (adjusted.quantity !== i.quantity) {
+             addActivity(roomId, r.name, 'edit', `Adjusted qty of "${i.name}" to ${adjusted.quantity}`);
           }
-          return { ...i, quantity: newQty };
+          return adjusted;
+        })
+      };
+    }));
+  };
+
+  const updateItemBatchQty = (roomId: number, itemId: number, batchIndex: number, delta: number) => {
+    setRooms(prev => prev.map(r => {
+      if (r.id !== roomId) return r;
+      return {
+        ...r,
+        items: r.items.map(i => {
+          if (i.id !== itemId) return i;
+          const normalized = ensureBatches(i);
+          const batches = normalized.batches ? normalized.batches.map(b => ({ ...b })) : [];
+          if (batchIndex < 0 || batchIndex >= batches.length) return normalized;
+          const b = batches[batchIndex];
+          const newQty = Math.max(0, b.qty + delta);
+          batches[batchIndex] = { ...b, qty: newQty };
+          const filtered = batches.filter(x => x.qty > 0);
+          const { totalQty, avgPrice, earliestExpiry } = summarizeBatches(filtered);
+          const adjusted = { ...normalized, batches: filtered, quantity: totalQty, price: avgPrice, expiryDate: earliestExpiry };
+          if (adjusted.quantity !== i.quantity) {
+            addActivity(roomId, r.name, 'edit', `Adjusted batch qty of "${i.name}" to ${adjusted.quantity}`);
+          }
+          return adjusted;
         })
       };
     }));
@@ -508,6 +616,7 @@ const App: React.FC = () => {
           onUpdateName={updateRoomName}
           onReceive={receiveStock}
           onUpdateQty={updateItemQty}
+          onUpdateBatchQty={updateItemBatchQty}
           onTransfer={moveItem}
           onDeleteItem={deleteItem}
         />

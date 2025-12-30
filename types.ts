@@ -2,6 +2,12 @@
 export type Category = 'consumables' | 'equipment' | 'instruments' | 'materials' | 'medication' | 'ppe' | 'other';
 export type UOM = 'pcs' | 'box' | 'unit' | 'kit';
 
+export interface ItemBatch {
+  qty: number;
+  unitPrice: number;
+  expiryDate?: string | null;
+}
+
 export interface Item {
   id: number;
   name: string;
@@ -14,6 +20,7 @@ export interface Item {
   category: Category;
   description: string;
   expiryDate?: string | null;
+  batches?: ItemBatch[];
 }
 
 export interface Room {
@@ -46,6 +53,7 @@ export interface PurchaseHistory {
   location: string;
   category: string;
   roomId: number;
+  uom?: UOM;
   expiryDate?: string | null;
 }
 

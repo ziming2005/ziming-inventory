@@ -26,7 +26,7 @@ interface MasterInventoryProps {
   rooms: Room[];
   history: PurchaseHistory[];
   logs: ActivityLog[];
-  onReceive: (roomId: number, itemData: Partial<Item>, qty: number, price: number, expiry?: string) => void;
+  onReceive: (roomId: number, itemData: Partial<Item>, qty: number, price: number, purchaseDate: string, expiry?: string) => void;
   onUpdateQty: (roomId: number, itemId: number, delta: number) => void;
   onTransfer: (fromRoomId: number, toRoomId: number, itemId: number) => void;
 }
@@ -56,6 +56,7 @@ const MasterInventory: React.FC<MasterInventoryProps> = ({
   });
   const [receiveQty, setReceiveQty] = useState(0);
   const [receivePrice, setReceivePrice] = useState(0);
+  const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [expiry, setExpiry] = useState('');
   const [hasExpiry, setHasExpiry] = useState(false);
 
@@ -82,10 +83,26 @@ const MasterInventory: React.FC<MasterInventoryProps> = ({
     });
   }, [history, historyCategory, historyVendor, historySearch]);
 
+  const groupedHistory = useMemo(() => {
+    const sorted = [...filteredHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const groups: Record<string, PurchaseHistory[]> = {};
+    sorted.forEach((h) => {
+      const key = new Date(h.timestamp).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(h);
+    });
+    return Object.entries(groups);
+  }, [filteredHistory]);
+
   const uniqueVendors = useMemo(() => {
     const vendors = new Set(history.map(h => h.vendor).filter(Boolean));
     return Array.from(vendors);
   }, [history]);
+
+  const [openBatchRows, setOpenBatchRows] = useState<Record<string, boolean>>({});
+  const toggleBatchRow = (key: string) => {
+    setOpenBatchRows(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   // Group by category for the table
   const itemsByCategory = useMemo(() => {
@@ -127,7 +144,7 @@ const MasterInventory: React.FC<MasterInventoryProps> = ({
   const handleReceiveSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRoomId) return;
-    onReceive(Number(selectedRoomId), formData, receiveQty, receivePrice, hasExpiry ? expiry : undefined);
+    onReceive(Number(selectedRoomId), formData, receiveQty, receivePrice, purchaseDate, hasExpiry ? expiry : undefined);
     setActiveTab('all');
     resetReceiveForm();
   };
@@ -136,6 +153,7 @@ const MasterInventory: React.FC<MasterInventoryProps> = ({
     setFormData({ name: '', brand: '', category: 'consumables', uom: 'pcs', code: '', vendor: '', description: '' });
     setReceiveQty(0);
     setReceivePrice(0);
+    setPurchaseDate(new Date().toISOString().split('T')[0]);
     setExpiry('');
     setHasExpiry(false);
     setSelectedProductKey('');
@@ -145,7 +163,7 @@ const MasterInventory: React.FC<MasterInventoryProps> = ({
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   const getDaysDiff = (dateStr: string) => {
@@ -227,60 +245,192 @@ const MasterInventory: React.FC<MasterInventoryProps> = ({
           <div className="flex flex-col gap-6 animate-in fade-in duration-300">
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-              <input type="text" placeholder="Quick search master inventory..." className="w-full pl-12 pr-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 focus:ring-2 focus:ring-[#4d9678] outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              <input
+                type="text"
+                placeholder="Quick search master inventory..."
+                className="w-full pl-12 pr-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 focus:ring-2 focus:ring-[#4d9678] outline-none transition-all"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
+
             <div className="border border-slate-200 rounded-2xl overflow-x-auto shadow-sm custom-scrollbar">
-              <table className="w-full text-[11px] text-left border-collapse min-w-[1100px]">
-                <thead className="bg-[#f8fafc] text-slate-700 font-black uppercase tracking-wider text-[9px] border-b border-slate-200 sticky top-0 z-10">
+              <table className="w-full text-left border-collapse min-w-[1100px] text-xs">
+                <thead className="bg-[#f8fafc] text-slate-500 font-black uppercase tracking-widest text-[9px] border-b border-slate-200 sticky top-0 z-10">
                   <tr>
-                    <th className="px-3 py-4 w-[100px]">Brand</th>
-                    <th className="px-3 py-4 w-[180px]">Product</th>
-                    <th className="px-3 py-4 w-[90px]">Code</th>
-                    <th className="px-3 py-4 w-[60px]">Qty</th>
-                    <th className="px-3 py-4 w-[60px]">UOM</th>
-                    <th className="px-3 py-4 w-[80px]">Price</th>
-                    <th className="px-3 py-4 w-[90px]">Total</th>
-                    <th className="px-3 py-4 w-[100px]">Vendor</th>
-                    <th className="px-3 py-4 w-[100px]">Category</th>
-                    <th className="px-3 py-4 w-[100px]">Expires</th>
-                    <th className="px-3 py-4 w-[110px]">Location</th>
+                    <th className="px-6 py-5 w-[100px]">Brand</th>
+                    <th className="px-6 py-5 w-[180px]">Product</th>
+                    <th className="px-6 py-5 w-[90px]">Code</th>
+                    <th className="px-6 py-5 w-[60px] text-center">Qty</th>
+                    <th className="px-6 py-5 w-[60px]">UOM</th>
+                    <th className="px-6 py-5 w-[80px]">Price</th>
+                    <th className="px-6 py-5 w-[90px]">Total</th>
+                    <th className="px-6 py-5 w-[100px]">Vendor</th>
+                    <th className="px-6 py-5 w-[100px]">Category</th>
+                    <th className="px-6 py-5 w-[100px]">Expires</th>
+                    <th className="px-6 py-5 w-[110px]">Location</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white">
-                  {Object.entries(itemsByCategory).length > 0 ? Object.entries(itemsByCategory).map(([cat, items]) => (
-                    <React.Fragment key={cat}>
-                      <tr className="bg-[#f1f5f9] border-y border-slate-200">
-                        <td colSpan={11} className="px-3 py-1.5 text-[10px] font-bold text-slate-600 tracking-widest">{cat}</td>
-                      </tr>
-                      {(items as any[]).map((item) => {
-                        const isExpired = item.expiryDate && new Date(item.expiryDate) < new Date();
-                        return (
-                          <tr key={`${item.roomId}-${item.id}`} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                            <td className="px-3 py-3 text-slate-500 font-medium whitespace-nowrap overflow-hidden text-ellipsis">#{item.brand || '-'}</td>
-                            <td className="px-3 py-3 font-bold text-slate-700 whitespace-nowrap overflow-hidden text-ellipsis">{item.name}</td>
-                            <td className="px-3 py-3 text-slate-600 text-[10px] whitespace-nowrap overflow-hidden text-ellipsis">{item.code || '-'}</td>
-                            <td className="px-3 py-3 font-bold text-slate-700 whitespace-nowrap">{item.quantity}</td>
-                            <td className="px-3 py-3 text-slate-600 whitespace-nowrap capitalize">{item.uom}</td>
-                            <td className="px-3 py-3 text-slate-600 whitespace-nowrap">${item.price.toFixed(2)}</td>
-                            <td className="px-3 py-3 font-bold text-[#4d9678] whitespace-nowrap">${(item.quantity * item.price).toFixed(2)}</td>
-                            <td className="px-3 py-3 text-slate-500 text-[10px] whitespace-nowrap overflow-hidden text-ellipsis">{item.vendor || '-'}</td>
-                            <td className="px-3 py-3"><span className="text-[10px] font-medium text-slate-500 capitalize tracking-wide">{item.category}</span></td>
-                            <td className={`px-3 py-3 whitespace-nowrap ${isExpired ? 'text-rose-600 font-bold bg-rose-50' : 'text-slate-600 font-medium'}`}>
-                              {item.expiryDate ? <>{new Date(item.expiryDate).toLocaleDateString()}{isExpired && <span className="ml-1 text-[8px] uppercase tracking-tighter">(EXP)</span>}</> : '-'}
-                            </td>
-                            <td className="px-3 py-3"><span className="text-emerald-600 font-bold text-[9px] whitespace-nowrap border border-emerald-100 px-2 py-0.5 rounded-lg bg-emerald-50/30">{item.roomName}</span></td>
-                          </tr>
-                        );
-                      })}
-                    </React.Fragment>
-                  )) : (
-                    <tr><td colSpan={11} className="py-24 text-center text-slate-300 font-black uppercase tracking-[0.3em] opacity-50">No Items Found</td></tr>
+
+                {/* Match Purchase History look */}
+                <tbody className="bg-white divide-y divide-slate-50">
+                  {Object.entries(itemsByCategory).length > 0 ? (
+                    Object.entries(itemsByCategory).map(([cat, items]) => (
+                      <React.Fragment key={cat}>
+                        <tr className="bg-slate-100/70 border-y border-slate-200">
+                          <td
+                            colSpan={11}
+                            className="px-6 py-3 text-[10px] font-black text-slate-600 uppercase tracking-[0.2em]"
+                          >
+                            {cat}
+                          </td>
+                        </tr>
+
+                        {(items as any[]).map((item) => {
+                          const expiryDateObj = item.expiryDate ? new Date(item.expiryDate) : null;
+                          const now = new Date();
+                          const soonThreshold = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+                          const isExpired = expiryDateObj ? expiryDateObj < now : false;
+                          const isExpiringSoon = expiryDateObj ? !isExpired && expiryDateObj <= soonThreshold : false;
+                          const batches = item.batches && item.batches.length ? item.batches : [{ qty: item.quantity, unitPrice: item.price, expiryDate: item.expiryDate || null }];
+                          const batchKey = `${item.roomId}-${item.id}`;
+                          const isOpen = !!openBatchRows[batchKey];
+
+                          return (
+                            <React.Fragment key={`${item.roomId}-${item.id}`}>
+                              <tr
+                                className="hover:bg-slate-50/60 transition-colors"
+                              >
+                                <td className="px-6 py-4 text-slate-500 whitespace-nowrap text-xs">
+                                  #{item.brand || '-'}
+                                </td>
+
+                                <td className="px-6 py-4 font-bold text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">
+                                  {item.name}
+                                </td>
+
+                                <td className="px-6 py-4 text-slate-500 text-[10px] whitespace-nowrap overflow-hidden text-ellipsis">
+                                  {item.code || '-'}
+                                </td>
+
+                                <td className="px-6 py-4 font-bold text-slate-800 text-center whitespace-nowrap">
+                                  {item.quantity}
+                                </td>
+
+                                <td className="px-6 py-4 text-slate-600 font-medium text-xs capitalize whitespace-nowrap">
+                                  {item.uom}
+                                </td>
+
+                                <td className="px-6 py-4 text-slate-500 font-semibold whitespace-nowrap">
+                                  ${item.price.toFixed(2)}
+                                </td>
+
+                                <td className="px-6 py-4 font-black text-[#4d9678] tracking-tight whitespace-nowrap">
+                                  ${(item.quantity * item.price).toFixed(2)}
+                                </td>
+
+                                <td className="px-6 py-4 text-slate-600 font-medium text-xs whitespace-nowrap overflow-hidden text-ellipsis">
+                                  {item.vendor || '-'}
+                                </td>
+
+                                <td className="px-6 py-4">
+                                  <span className="text-[10px] font-medium text-slate-500 capitalize tracking-wide">
+                                    {item.category}
+                                  </span>
+                                </td>
+
+                                <td
+                                  className={`px-6 py-4 text-xs whitespace-nowrap ${
+                                    isExpired
+                                      ? 'text-rose-600 font-bold'
+                                      : isExpiringSoon
+                                      ? 'text-amber-600 font-bold'
+                                      : 'text-slate-500'
+                                  }`}
+                                >
+                                  {item.expiryDate ? (
+                                    <>
+                                      {new Date(item.expiryDate).toLocaleDateString()}
+                                      {isExpired && (
+                                        <span className="ml-1 text-[9px] uppercase tracking-tight font-black">
+                                          (EXP)
+                                        </span>
+                                      )}
+                                      {isExpiringSoon && (
+                                        <span className="ml-1 text-[9px] uppercase tracking-tight font-black">
+                                          (SOON)
+                                        </span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    '-'
+                                  )}
+                                  {batches.length > 1 && (
+                                    <button
+                                      type="button"
+                                      className="ml-2 text-[10px] font-bold text-blue-600 underline"
+                                      onClick={(e) => { e.stopPropagation(); toggleBatchRow(batchKey); }}
+                                    >
+                                      {isOpen ? 'Hide' : 'View'}
+                                    </button>
+                                  )}
+                                </td>
+
+                                <td className="px-6 py-4">
+                                  <span className="text-emerald-600 font-bold text-[10px] whitespace-nowrap border border-emerald-100 px-2 py-0.5 rounded-lg bg-emerald-50/30">
+                                    {item.roomName}
+                                  </span>
+                                </td>
+                              </tr>
+                              {isOpen && (
+                                batches.map((b: any, idx: number) => {
+                                  const bExpiry = b.expiryDate ? new Date(b.expiryDate) : null;
+                                  const bExpired = bExpiry ? bExpiry < now : false;
+                                  const bSoon = bExpiry ? !bExpired && bExpiry <= soonThreshold : false;
+                                  return (
+                                    <tr key={idx} className="bg-slate-50/60">
+                                      <td className="px-6 py-2 text-[11px] text-slate-400">Batch {idx + 1}</td>
+                                      <td className="px-6 py-2 text-[11px] font-semibold text-slate-700"></td>
+                                      <td className="px-6 py-2 text-[11px] text-slate-400"></td>
+                                    <td className="px-6 py-2 text-[11px] font-bold text-slate-800 text-center">{b.qty}</td>
+                                      <td className="px-6 py-2 text-[11px] text-slate-600"></td>
+                                      <td className="px-6 py-2 text-[11px] text-slate-500">${b.unitPrice.toFixed(2)}</td>
+                                      <td className="px-6 py-2 text-[11px] font-bold text-[#4d9678]">${(b.qty * b.unitPrice).toFixed(2)}</td>
+                                      <td className="px-6 py-2 text-[11px] text-slate-400"></td>
+                                      <td className="px-6 py-2 text-[11px] text-slate-400"></td>
+                                      <td className={`px-6 py-2 text-[11px] whitespace-nowrap ${
+                                        bExpired ? 'text-rose-600 font-bold' : bSoon ? 'text-amber-600 font-bold' : 'text-slate-500'
+                                      }`}>
+                                        {bExpiry ? bExpiry.toLocaleDateString() : '(No expiry)'}
+                                        {bExpired && <span className="ml-1 text-[9px] uppercase font-black">(EXP)</span>}
+                                        {bSoon && !bExpired && <span className="ml-1 text-[9px] uppercase font-black">(SOON)</span>}
+                                      </td>
+                                      <td className="px-6 py-2 text-[11px] text-slate-400">—</td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </React.Fragment>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan={11}
+                        className="py-24 text-center text-slate-300 font-black uppercase tracking-[0.3em] opacity-50"
+                      >
+                        No Items Found
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>
             </div>
           </div>
         )}
+
 
         {/* VIEW: RECEIVE STOCK */}
         {activeTab === 'receive' && (
@@ -290,40 +440,95 @@ const MasterInventory: React.FC<MasterInventoryProps> = ({
                  <h4 className="text-[#3498db] font-bold text-xl tracking-tight">Receive New Stock</h4>
               </div>
               <form onSubmit={handleReceiveSubmit} className="flex flex-col gap-8 w-full">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                   <div className="flex flex-col gap-2">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Select Product *</label>
-                    <select value={selectedProductKey} onChange={handleProductSelect} className="px-4 py-3 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 text-sm focus:ring-2 focus:ring-[#3498db] outline-none shadow-sm" required>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Select Product *</label>
+                    <select value={selectedProductKey} onChange={handleProductSelect} className="px-4 py-3 rounded-xl border border-slate-200 bg-white font-normal text-slate-800 text-sm focus:ring-2 focus:ring-[#3498db] outline-none shadow-sm" required>
                       <option value="">Choose existing product...</option>
-                      {rooms.flatMap(r => r.items.map(i => <option key={`${r.id}-${i.id}`} value={`${r.id}-${i.id}`}>{i.name} ({i.brand}) - {r.name}</option>))}
+                      {rooms.flatMap(r => r.items.map(i => (
+                        <option key={`${r.id}-${i.id}`} value={`${r.id}-${i.id}`}>
+                          {i.name} ({i.brand})
+                        </option>
+                      )))}
                       <option value="new" className="text-[#3498db] font-bold">⊕ Create New Product...</option>
                     </select>
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Add to Location *</label>
-                    <select value={selectedRoomId} onChange={e => setSelectedRoomId(e.target.value)} className="px-4 py-3 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 text-sm focus:ring-2 focus:ring-[#3498db] outline-none shadow-sm" required>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Add to Location *</label>
+                    <select value={selectedRoomId} onChange={e => setSelectedRoomId(e.target.value)} className="px-4 py-3 rounded-xl border border-slate-200 font-normal bg-white text-slate-800 text-sm focus:ring-2 focus:ring-[#3498db] outline-none shadow-sm" required>
                       <option value="">Select room...</option>
                       {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                     </select>
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Quantity *</label>
-                    <input type="number" required placeholder="0" className="px-4 py-3 rounded-xl border border-slate-200 font-semibold text-sm focus:ring-2 focus:ring-[#3498db] outline-none shadow-sm" value={receiveQty || ''} onChange={e => setReceiveQty(Number(e.target.value))} />
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Quantity *</label>
+                    <input type="number" required placeholder="0" className="px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-[#3498db] outline-none shadow-sm" value={receiveQty || ''} onChange={e => setReceiveQty(Number(e.target.value))} />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Unit Price *</label>
-                    <input type="number" step="0.01" required placeholder="0.00" className="px-4 py-3 rounded-xl border border-slate-200 font-semibold text-sm focus:ring-2 focus:ring-[#3498db] outline-none shadow-sm" value={receivePrice || ''} onChange={e => setReceivePrice(Number(e.target.value))} />
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Unit Price *</label>
+                    <input type="number" step="0.01" required placeholder="0.00" className="px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-[#3498db] outline-none shadow-sm" value={receivePrice || ''} onChange={e => setReceivePrice(Number(e.target.value))} />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Purchase Date *</label>
+                    <input 
+                      type="date" 
+                      required
+                      className="px-4 py-3 rounded-xl border border-slate-200 font-normal text-sm focus:ring-2 focus:ring-[#3498db] outline-none shadow-sm" 
+                      value={purchaseDate}
+                      onChange={e => setPurchaseDate(e.target.value)} 
+                    />
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <input type="checkbox" id="hasExpiryForm" checked={hasExpiry} onChange={e => setHasExpiry(e.target.checked)} className="w-5 h-5 accent-[#3498db] rounded" />
-                  <label htmlFor="hasExpiryForm" className="text-xs font-bold text-slate-600">Track expiry date for this batch</label>
-                  {hasExpiry && <input type="date" required className="ml-4 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold focus:ring-2 focus:ring-[#3498db] outline-none shadow-sm" value={expiry} onChange={e => setExpiry(e.target.value)} />}
+                  <label htmlFor="hasExpiryForm" className="text-xs font-bold text-slate-500">Track expiry date for this batch</label>
+                  {hasExpiry && <input type="date" required className="ml-4 px-4 py-2 rounded-xl border border-slate-200 text-sm font-normal focus:ring-2 focus:ring-[#3498db] outline-none shadow-sm" value={expiry} onChange={e => setExpiry(e.target.value)} />}
                 </div>
+                {/* Existing product summary */}
+                {receiveMode === 'existing' && selectedProductKey && selectedRoomId && (() => {
+                  const [sourceRoomId, sourceItemId] = selectedProductKey.includes('-') ? selectedProductKey.split('-').map(Number) : [null, null];
+                  const sourceRoom = rooms.find(r => r.id === sourceRoomId);
+                  const sourceItem = sourceRoom?.items.find(i => i.id === sourceItemId);
+                  const targetRoom = rooms.find(r => r.id === Number(selectedRoomId));
+                  if (!sourceItem || !targetRoom) return null;
+
+                  const matchInTarget = targetRoom.items.find(i => 
+                    i.name.toLowerCase() === sourceItem.name.toLowerCase() &&
+                    (i.brand || '').toLowerCase() === (sourceItem.brand || '').toLowerCase()
+                  );
+
+                  const incomingQty = receiveQty || 0;
+                  const incomingPrice = receivePrice || 0;
+
+                  if (!matchInTarget) {
+                    return (
+                      <div className="bg-white border border-slate-200 rounded-xl p-4 text-xs text-slate-600 space-y-1 shadow-sm">
+                        <div className="font-black text-slate-700 uppercase tracking-[0.15em] mb-1">Price Preview</div>
+                        <div className="flex justify-between"><span>Adding to {targetRoom.name}:</span><span className="font-bold text-blue-600">{incomingQty} {sourceItem.uom} @ ${incomingPrice.toFixed(2)} = ${(incomingQty * incomingPrice).toFixed(2)}</span></div>
+                        <div className="flex justify-between border-t border-slate-100 pt-1"><span>Status:</span><span className="font-black text-emerald-600">Will be added as NEW item in {targetRoom.name}</span></div>
+                      </div>
+                    );
+                  }
+
+                  const currentQty = matchInTarget.quantity;
+                  const currentUnitPrice = matchInTarget.price;
+                  const newQty = currentQty + incomingQty;
+                  const newAvg = newQty > 0 ? ((currentQty * currentUnitPrice) + (incomingQty * incomingPrice)) / newQty : 0;
+
+                  return (
+                    <div className="bg-white border border-slate-200 rounded-xl p-4 text-xs text-slate-600 space-y-1 shadow-sm">
+                      <div className="font-black text-slate-700 uppercase tracking-[0.15em] mb-1">Price Preview</div>
+                      <div className="flex justify-between"><span>Current Stock in {targetRoom.name}:</span><span className="font-bold text-slate-800">{currentQty} {matchInTarget.uom} @ ${currentUnitPrice.toFixed(2)} = ${(currentQty * currentUnitPrice).toFixed(2)}</span></div>
+                      <div className="flex justify-between"><span>Adding:</span><span className="font-bold text-blue-600">{incomingQty} {matchInTarget.uom} @ ${incomingPrice.toFixed(2)} = ${(incomingQty * incomingPrice).toFixed(2)}</span></div>
+                      <div className="flex justify-between border-t border-slate-100 pt-1"><span>After Receive:</span><span className="font-black text-emerald-600">{newQty} {matchInTarget.uom} @ ${newAvg.toFixed(2)} avg = ${(newQty * newAvg).toFixed(2)}</span></div>
+                    </div>
+                  );
+                })()}
+
                 {receiveMode === 'new' && (
                   <div className="flex flex-col gap-6 animate-in slide-in-from-top-4 duration-300 pt-4 border-t border-slate-50">
                     <h5 className="text-[#3498db] font-black uppercase text-[10px] tracking-[0.2em] pb-1">New Product Registration</h5>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
                       <div className="flex flex-col gap-2">
                         <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Product Name *</label>
                         <input required placeholder="e.g. Dental Gloves" className="px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-[#3498db] outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
@@ -342,12 +547,32 @@ const MasterInventory: React.FC<MasterInventoryProps> = ({
                           {UOMS.map(u => <option key={u} value={u}>{u.toUpperCase()}</option>)}
                         </select>
                       </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Vendor</label>
+                        <input placeholder="e.g. MedSupply Co" className="px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-[#3498db] outline-none" value={formData.vendor} onChange={e => setFormData({...formData, vendor: e.target.value})} />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Category</label>
+                        <select className="px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-[#3498db] outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value as Category})}>
+                          {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Description</label>
+                      <textarea
+                        rows={2}
+                        placeholder="Product description or usage notes..."
+                        className="px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-[#3498db] outline-none resize-none"
+                        value={formData.description}
+                        onChange={e => setFormData({...formData, description: e.target.value})}
+                      />
                     </div>
                   </div>
                 )}
                 <div className="flex gap-4">
-                  <button type="submit" className="bg-[#3498db] text-white px-10 py-4 rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:bg-[#2980b9] shadow-xl shadow-blue-200 transition-all">Submit Entry</button>
-                  <button type="button" onClick={resetReceiveForm} className="bg-slate-200 text-slate-600 px-10 py-4 rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:bg-slate-300 transition-all">Reset Form</button>
+                  <button type="submit" className="bg-[#3498db] text-white px-10 py-4 rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:bg-[#2980b9] shadow-sm shadow-blue-200 transition-all">Submit Entry</button>
+                  <button type="button" onClick={resetReceiveForm} className="bg-slate-200 text-slate-600 px-10 py-4 rounded-2xl font-black uppercase text-xs tracking-[0.2em] shadow-sm hover:bg-slate-300 transition-all">Reset Form</button>
                 </div>
               </form>
           </div>
@@ -379,37 +604,61 @@ const MasterInventory: React.FC<MasterInventoryProps> = ({
                   <thead>
                     <tr className="bg-[#f8fafc] text-slate-500 font-black uppercase tracking-widest text-[9px] border-b border-slate-200">
                       <th className="px-6 py-5">Date</th>
-                      <th className="px-6 py-5">Product</th>
                       <th className="px-6 py-5">Brand</th>
+                      <th className="px-6 py-5">Product</th>
                       <th className="px-6 py-5">Code</th>
-                      <th className="px-6 py-5">Vendor</th>
                       <th className="px-6 py-5 text-center">Qty</th>
-                      <th className="px-6 py-5">Unit Price</th>
-                      <th className="px-6 py-5">Total Price</th>
-                      <th className="px-6 py-5">Location</th>
+                      <th className="px-6 py-5">UOM</th>
+                      <th className="px-6 py-5">Price</th>
+                      <th className="px-6 py-5">Total</th>
+                      <th className="px-6 py-5">Vendor</th>
                       <th className="px-6 py-5">Category</th>
+                      <th className="px-6 py-5">Expires</th>
+                      <th className="px-6 py-5">Location</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {filteredHistory.length > 0 ? filteredHistory.map(h => {
-                      const currentRoom = rooms.find(r => r.id === h.roomId);
-                      const displayLocation = currentRoom ? currentRoom.name : h.location;
-                      return (
-                        <tr key={h.id} className="hover:bg-purple-50/20 transition-colors">
-                          <td className="px-6 py-5 text-slate-500 whitespace-nowrap text-xs">{formatDate(h.timestamp)}</td>
-                          <td className="px-6 py-5 font-bold text-slate-800">{h.productName}</td>
-                          <td className="px-6 py-5 text-slate-500 text-xs">#{h.brand || '-'}</td>
-                          <td className="px-6 py-5 text-slate-500 text-[10px]">{h.code || '-'}</td>
-                          <td className="px-6 py-5 text-slate-600 font-medium text-xs">{h.vendor || '-'}</td>
-                          <td className="px-6 py-5 font-bold text-[#9b59b6] text-center">{h.qty}</td>
-                          <td className="px-6 py-5 text-slate-500 font-semibold">${h.unitPrice.toFixed(2)}</td>
-                          <td className="px-6 py-5 text-[#c0392b] font-black tracking-tight">${h.totalPrice.toFixed(2)}</td>
-                          <td className="px-6 py-5 text-emerald-600 font-bold text-[10px] whitespace-nowrap">{displayLocation}</td>
-                          <td className="px-6 py-5"><span className="text-[10px] font-medium text-slate-500 capitalize tracking-wide">{h.category}</span></td>
+                    {groupedHistory.length > 0 ? groupedHistory.map(([month, items]) => (
+                      <React.Fragment key={month}>
+                        <tr className="bg-purple-50/50 border-y border-purple-100">
+                          <td colSpan={12} className="px-6 py-3 text-[10px] font-black text-[#9b59b6] uppercase tracking-[0.2em]">{month}</td>
                         </tr>
-                      );
-                    }) : (
-                      <tr><td colSpan={10} className="py-24 text-center text-slate-300 font-black uppercase tracking-[0.3em] opacity-50">No Records Found</td></tr>
+                        {items.map(h => {
+                          const currentRoom = rooms.find(r => r.id === h.roomId);
+                          const displayLocation = currentRoom ? currentRoom.name : h.location;
+                          const expiryDate = h.expiryDate ? new Date(h.expiryDate) : null;
+                          const now = new Date();
+                          const soonThreshold = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+                          const isExpired = expiryDate ? expiryDate < now : false;
+                          const isExpiringSoon = expiryDate ? !isExpired && expiryDate <= soonThreshold : false;
+                          return (
+                            <tr key={h.id} className="hover:bg-purple-50/20 transition-colors">
+                              <td className="px-6 py-4 text-slate-500 whitespace-nowrap text-xs">{formatDate(h.timestamp)}</td>
+                              <td className="px-6 py-4 text-slate-500 text-xs">#{h.brand || '-'}</td>
+                              <td className="px-6 py-4 font-bold text-slate-800">{h.productName}</td>
+                              <td className="px-6 py-4 text-slate-500 text-[10px]">{h.code || '-'}</td>
+                              <td className="px-6 py-4 font-bold text-[#9b59b6] text-center">{h.qty}</td>
+                              <td className="px-6 py-4 text-slate-600 font-medium text-xs capitalize">{h.uom || 'pcs'}</td>
+                              <td className="px-6 py-4 text-slate-500 font-semibold">${h.unitPrice.toFixed(2)}</td>
+                              <td className="px-6 py-4 text-[#c0392b] font-black tracking-tight">${h.totalPrice.toFixed(2)}</td>
+                              <td className="px-6 py-4 text-slate-600 font-medium text-xs">{h.vendor || '-'}</td>
+                              <td className="px-6 py-4"><span className="text-[10px] font-medium text-slate-500 capitalize tracking-wide">{h.category}</span></td>
+                              <td className={`px-6 py-4 text-xs whitespace-nowrap ${isExpired ? 'text-rose-600 font-bold' : isExpiringSoon ? 'text-amber-600 font-bold' : 'text-slate-500'}`}>
+                                {expiryDate ? (
+                                  <>
+                                    {expiryDate.toLocaleDateString()}
+                                    {isExpired && <span className="ml-1 text-[9px] uppercase tracking-tight font-black">(EXP)</span>}
+                                    {isExpiringSoon && <span className="ml-1 text-[9px] uppercase tracking-tight font-black">(SOON)</span>}
+                                  </>
+                                ) : '-'}
+                              </td>
+                              <td className="px-6 py-4 text-emerald-600 font-bold text-[10px] whitespace-nowrap">{displayLocation}</td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    )) : (
+                      <tr><td colSpan={12} className="py-24 text-center text-slate-300 font-black uppercase tracking-[0.3em] opacity-50">No Records Found</td></tr>
                     )}
                   </tbody>
                 </table>

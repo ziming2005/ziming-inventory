@@ -76,6 +76,7 @@ const ClinicMap: React.FC<ClinicMapProps> = ({
   const lastMoveTarget = useRef({ x: 20, y: 20 });
   
   const wasDraggingRef = useRef(false);
+  const justDraggedRef = useRef(false);
   const dragStartPosRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -189,8 +190,15 @@ const ClinicMap: React.FC<ClinicMapProps> = ({
   };
 
   const handleMouseUp = () => {
+    if (wasDraggingRef.current) {
+      justDraggedRef.current = true;
+      // Clear the drag flag shortly after to avoid click firing the modal
+      setTimeout(() => {
+        wasDraggingRef.current = false;
+        justDraggedRef.current = false;
+      }, 0);
+    }
     setDraggedRoomId(null);
-    wasDraggingRef.current = false;
   };
 
   const handleRoomClick = (roomId: number) => {
@@ -322,9 +330,12 @@ const ClinicMap: React.FC<ClinicMapProps> = ({
             onMouseDown={(e) => handleMouseDown(e, room.id)} 
             onClick={(e) => { 
               e.stopPropagation();
-              if (!wasDraggingRef.current) { 
-                handleRoomClick(room.id); 
-              } 
+              if (wasDraggingRef.current || justDraggedRef.current) {
+                justDraggedRef.current = false;
+                wasDraggingRef.current = false;
+                return;
+              }
+              handleRoomClick(room.id); 
             }}
           >
             <div className={`hexagon w-16 h-16 md:w-20 md:h-20 flex flex-col items-center justify-center p-2 text-center transition-colors ${isDeleteMode ? 'bg-rose-600 text-white shadow-xl shadow-rose-500/30' : draggedRoomId === room.id ? 'bg-[#4d9678] text-white shadow-xl shadow-emerald-500/30' : 'bg-white/95 text-slate-800 shadow-xl border border-white/50'}`}>
