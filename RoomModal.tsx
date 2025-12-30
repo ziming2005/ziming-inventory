@@ -47,7 +47,7 @@ const RoomModal: React.FC<RoomModalProps> = ({ room, allRooms, logs, onClose, on
     );
   }, [room.items, roomSearch]);
 
-  const itemsByCategory = useMemo(() => {
+  const itemsByCategory = useMemo<Record<string, Item[]>>(() => {
     const groups: Record<string, Item[]> = {};
     filteredItems.forEach(item => {
       const cat = (item.category || 'uncategorized').toUpperCase();
@@ -251,7 +251,7 @@ const RoomModal: React.FC<RoomModalProps> = ({ room, allRooms, logs, onClose, on
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {Object.entries(itemsByCategory).length > 0 ? Object.entries(itemsByCategory).map(([cat, items]) => (
+                  {Object.entries(itemsByCategory).length > 0 ? Object.entries(itemsByCategory).map(([cat, items]: [string, Item[]]) => (
                     <React.Fragment key={cat}>
                       <tr className="bg-[#f1f5f9] border-y border-slate-100">
                         <td colSpan={12} className="px-3 py-1.5 text-[9px] font-black text-slate-400 tracking-[0.2em]">{cat}</td>

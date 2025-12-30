@@ -167,8 +167,8 @@ const ClinicMap: React.FC<ClinicMapProps> = ({
   };
 
   const handleMouseDown = (e: React.MouseEvent, id: number) => {
+    e.stopPropagation(); // stop map click/add handlers from firing
     if (isLocked || isAddMode || isDeleteMode) return;
-    e.stopPropagation();
     setDraggedRoomId(id);
     wasDraggingRef.current = false;
     dragStartPosRef.current = { x: e.clientX, y: e.clientY };
@@ -188,7 +188,19 @@ const ClinicMap: React.FC<ClinicMapProps> = ({
     }
   };
 
-  const handleMouseUp = () => setDraggedRoomId(null);
+  const handleMouseUp = () => {
+    setDraggedRoomId(null);
+    wasDraggingRef.current = false;
+  };
+
+  const handleRoomClick = (roomId: number) => {
+    if (isDeleteMode) {
+      onDeleteRoom(roomId);
+      onSetDeleteMode(false);
+      return;
+    }
+    onSelectRoom(roomId);
+  };
 
   return (
     <section className="w-full bg-white rounded-[2rem] shadow-xl overflow-hidden relative border border-slate-100 h-[650px] flex flex-col">
@@ -222,7 +234,7 @@ const ClinicMap: React.FC<ClinicMapProps> = ({
       <div className="p-5 bg-slate-50 border-b border-slate-100 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           <MapIcon className="w-5 h-5 text-emerald-600" />
-          <span className="text-sm font-black text-slate-700 uppercase tracking-widest">Interactive Clinic Blueprint</span>
+          <span className="text-xl font-bold text-slate-700 tracking-wide">Interactive Clinic Blueprint</span>
         </div>
         
         <div className="flex items-center gap-4">
@@ -240,7 +252,7 @@ const ClinicMap: React.FC<ClinicMapProps> = ({
           </div>
           <div className="h-6 w-px bg-slate-200" />
           <div className="flex items-center gap-3 relative" ref={templateMenuRef}>
-            <button onClick={() => setShowTemplateMenu(!showTemplateMenu)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-black text-slate-600 hover:bg-slate-50 transition-all shadow-sm uppercase tracking-widest">
+            <button onClick={() => setShowTemplateMenu(!showTemplateMenu)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm tracking-wide">
               <Layout className="w-4 h-4 text-emerald-600" /> Select Template <ChevronDown className={`w-4 h-4 transition-transform ${showTemplateMenu ? 'rotate-180' : ''}`} />
             </button>
             {showTemplateMenu && (
@@ -311,14 +323,13 @@ const ClinicMap: React.FC<ClinicMapProps> = ({
             onClick={(e) => { 
               e.stopPropagation();
               if (!wasDraggingRef.current) { 
-                if (isDeleteMode) onDeleteRoom(room.id); 
-                else onSelectRoom(room.id); 
+                handleRoomClick(room.id); 
               } 
             }}
           >
             <div className={`hexagon w-16 h-16 md:w-20 md:h-20 flex flex-col items-center justify-center p-2 text-center transition-colors ${isDeleteMode ? 'bg-rose-600 text-white shadow-xl shadow-rose-500/30' : draggedRoomId === room.id ? 'bg-[#4d9678] text-white shadow-xl shadow-emerald-500/30' : 'bg-white/95 text-slate-800 shadow-xl border border-white/50'}`}>
-              <span className="text-[8px] md:text-[10px] font-black leading-tight break-words max-w-[80px] uppercase pointer-events-none tracking-tight">{room.name}</span>
-              <span className={`text-[7px] md:text-[8px] mt-1 px-1.5 py-0.5 rounded-full font-black uppercase tracking-widest pointer-events-none ${isDeleteMode || draggedRoomId === room.id ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'}`}>{room.items.length} SKU</span>
+              <span className="text-[8px] md:text-[11px] font-bold leading-tight break-words max-w-[80px] pointer-events-none tracking-normal">{room.name}</span>
+              <span className={`text-[7px] md:text-[8px] mt-1 px-1.5 py-0.5 rounded-full font-black uppercase tracking-wider pointer-events-none ${isDeleteMode || draggedRoomId === room.id ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'}`}>{room.items.length} SKU</span>
             </div>
           </div>
         ))}

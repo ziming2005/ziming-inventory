@@ -552,27 +552,27 @@ const ClinicAnalytics: React.FC<ClinicAnalyticsProps> = ({ history }) => {
           <div className="flex flex-col gap-6 bg-slate-50/50 p-6 rounded-3xl border border-slate-100">
             <div className="grid grid-cols-2 gap-6">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Period A (Primary)</label>
+                <label className="text-[10px] font-bold text-slate-500 tracking-wider">Period A (Primary)</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input 
                     type="month" 
                     value={periodA} 
                     onChange={(e) => setPeriodA(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#06b6d4]/20 transition-all"
+                    className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-medium text-slate-500 outline-none focus:ring-2 focus:ring-[#06b6d4]/20 transition-all"
                   />
                 </div>
               </div>
               {analysisMode === 'compare' ? (
                 <div className="flex flex-col gap-1.5 animate-in slide-in-from-right-2 duration-300">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Period B (Compare To)</label>
+                  <label className="text-[10px] font-bold text-slate-500 tracking-wider">Period B (Compare To)</label>
                   <div className="relative">
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input 
                       type="month" 
                       value={periodB} 
                       onChange={(e) => setPeriodB(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#8b5cf6]/20 transition-all"
+                      className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-medium text-slate-500 outline-none focus:ring-2 focus:ring-[#06b6d4]/20 transition-all"
                     />
                   </div>
                 </div>
@@ -588,7 +588,7 @@ const ClinicAnalytics: React.FC<ClinicAnalyticsProps> = ({ history }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-200/50">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                <label className="text-[10px] font-bold text-slate-500 tracking-wider flex items-center gap-1.5">
                   <Filter className="w-3 h-3" /> Category Filter
                 </label>
                 
@@ -634,7 +634,7 @@ const ClinicAnalytics: React.FC<ClinicAnalyticsProps> = ({ history }) => {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                <label className="text-[10px] font-bold text-slate-500 tracking-wider flex items-center gap-1.5">
                   <Building2 className="w-3 h-3" /> Vendor Filter
                 </label>
                 
@@ -748,14 +748,14 @@ const ClinicAnalytics: React.FC<ClinicAnalyticsProps> = ({ history }) => {
                     <Clock className="w-3 h-3" />
                   </div>
                   <div className="flex-1 text-left">
-                    <p className="text-[7px] font-black text-slate-400 leading-none mb-0.5 uppercase tracking-tighter">Timeframe</p>
+                    <p className="text-[9px] font-bold text-slate-500 leading-normal mb-0.5 tracking-normal">Timeframe</p>
                     <p className="text-[10px] font-bold text-slate-700 leading-none">{formatPeriodName(distributionPeriod)}</p>
                   </div>
                   <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-300 ${isPeriodDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {isPeriodDropdownOpen && (
-                  <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-xl shadow-2xl border border-slate-100 z-[70] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-xl shadow-md border border-slate-100 z-[70] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="p-1.5 space-y-0.5 max-h-[250px] overflow-y-auto custom-scrollbar">
                       <button 
                         onClick={() => { setDistributionPeriod('all'); setIsPeriodDropdownOpen(false); }}
@@ -789,14 +789,14 @@ const ClinicAnalytics: React.FC<ClinicAnalyticsProps> = ({ history }) => {
                     {currentBreakdownOption.icon}
                   </div>
                   <div className="flex-1 text-left">
-                    <p className="text-[7px] font-black text-slate-400 leading-none mb-0.5 uppercase tracking-tighter">View Mode</p>
+                    <p className="text-[9px] font-bold text-slate-500 leading-normal mb-0.5 tracking-normal">View Mode</p>
                     <p className="text-[10px] font-bold text-slate-700 leading-none">{currentBreakdownOption.label}</p>
                   </div>
                   <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-300 ${isBreakdownDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {isBreakdownDropdownOpen && (
-                  <div className="absolute top-full right-0 mt-2 w-52 bg-white rounded-xl shadow-2xl border border-slate-100 z-[70] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="absolute top-full right-0 mt-2 w-52 bg-white rounded-xl shadow-md border border-slate-100 z-[70] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="p-1.5 space-y-0.5">
                       {breakdownOptions.map((opt) => (
                         <button 
@@ -829,7 +829,7 @@ const ClinicAnalytics: React.FC<ClinicAnalyticsProps> = ({ history }) => {
               onMouseLeave={() => setIsMouseOverSVG(false)}
             >
               {(() => {
-                const size = 300;
+                const size = 250;
                 const center = size / 2;
                 return (
                   <svg width={size} height={260} viewBox={`0 0 ${size} 260`} className="mx-auto overflow-visible">
@@ -898,7 +898,7 @@ const ClinicAnalytics: React.FC<ClinicAnalyticsProps> = ({ history }) => {
                   }}
                 >
                   <div className="bg-white border border-slate-111 rounded-[1.25rem] p-4 flex flex-col items-center text-center min-w-[130px] shadow-sm">
-                    <span className="text-[9px] font-black text-slate-400 leading-none mb-1.5 tracking-widest">{currentBreakdown[hoveredIdx].label}</span>
+                    <span className="text-[10px] font-bold text-slate-500 leading-none mb-1.5 tracking-wide">{currentBreakdown[hoveredIdx].label}</span>
                     <span className="text-sm font-black text-slate-800 leading-none mb-1.5">
                       {isReorderReport ? `${currentBreakdown[hoveredIdx].amount.toLocaleString()} Reorders` : (isQuantityReport ? `${currentBreakdown[hoveredIdx].amount.toLocaleString()} Units` : `$${currentBreakdown[hoveredIdx].amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
                     </span>
@@ -930,8 +930,8 @@ const ClinicAnalytics: React.FC<ClinicAnalyticsProps> = ({ history }) => {
                         {cat.icon || <Package className="w-4 h-4" />}
                       </div>
                       <div className="flex flex-col min-w-0">
-                        <span className="text-[11px] font-black text-slate-800 leading-none mb-1 truncate group-hover:text-emerald-700">{cat.label}</span>
-                        <span className="text-[9px] font-bold text-slate-400 leading-none">
+                        <span className="text-[12px] font-black text-slate-800 leading-none mb-1 tracking-wide truncate group-hover:text-emerald-700">{cat.label}</span>
+                        <span className="text-[10px] font-bold text-slate-500 leading-thigh">
                           {cat.percentage.toFixed(1)}%
                         </span>
                       </div>

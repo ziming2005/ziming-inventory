@@ -231,7 +231,7 @@ const MasterInventory: React.FC<MasterInventoryProps> = ({
             </div>
             <div className="border border-slate-200 rounded-2xl overflow-x-auto shadow-sm custom-scrollbar">
               <table className="w-full text-[11px] text-left border-collapse min-w-[1100px]">
-                <thead className="bg-[#f8fafc] text-slate-500 font-black uppercase tracking-widest text-[9px] border-b border-slate-200 sticky top-0 z-10">
+                <thead className="bg-[#f8fafc] text-slate-700 font-black uppercase tracking-wider text-[9px] border-b border-slate-200 sticky top-0 z-10">
                   <tr>
                     <th className="px-3 py-4 w-[100px]">Brand</th>
                     <th className="px-3 py-4 w-[180px]">Product</th>
@@ -250,22 +250,22 @@ const MasterInventory: React.FC<MasterInventoryProps> = ({
                   {Object.entries(itemsByCategory).length > 0 ? Object.entries(itemsByCategory).map(([cat, items]) => (
                     <React.Fragment key={cat}>
                       <tr className="bg-[#f1f5f9] border-y border-slate-200">
-                        <td colSpan={11} className="px-3 py-1.5 text-[9px] font-black text-slate-400 tracking-[0.2em]">{cat}</td>
+                        <td colSpan={11} className="px-3 py-1.5 text-[10px] font-bold text-slate-600 tracking-widest">{cat}</td>
                       </tr>
                       {(items as any[]).map((item) => {
                         const isExpired = item.expiryDate && new Date(item.expiryDate) < new Date();
                         return (
                           <tr key={`${item.roomId}-${item.id}`} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                            <td className="px-3 py-3 text-slate-400 font-medium whitespace-nowrap overflow-hidden text-ellipsis">#{item.brand || '-'}</td>
-                            <td className="px-3 py-3 font-bold text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{item.name}</td>
-                            <td className="px-3 py-3 text-slate-400 font-mono text-[10px] whitespace-nowrap overflow-hidden text-ellipsis">{item.code || '-'}</td>
+                            <td className="px-3 py-3 text-slate-500 font-medium whitespace-nowrap overflow-hidden text-ellipsis">#{item.brand || '-'}</td>
+                            <td className="px-3 py-3 font-bold text-slate-700 whitespace-nowrap overflow-hidden text-ellipsis">{item.name}</td>
+                            <td className="px-3 py-3 text-slate-600 text-[10px] whitespace-nowrap overflow-hidden text-ellipsis">{item.code || '-'}</td>
                             <td className="px-3 py-3 font-bold text-slate-700 whitespace-nowrap">{item.quantity}</td>
-                            <td className="px-3 py-3 text-slate-500 whitespace-nowrap capitalize">{item.uom}</td>
-                            <td className="px-3 py-3 text-slate-500 whitespace-nowrap">${item.price.toFixed(2)}</td>
+                            <td className="px-3 py-3 text-slate-600 whitespace-nowrap capitalize">{item.uom}</td>
+                            <td className="px-3 py-3 text-slate-600 whitespace-nowrap">${item.price.toFixed(2)}</td>
                             <td className="px-3 py-3 font-bold text-[#4d9678] whitespace-nowrap">${(item.quantity * item.price).toFixed(2)}</td>
-                            <td className="px-3 py-3 text-slate-400 text-[10px] whitespace-nowrap overflow-hidden text-ellipsis">{item.vendor || '-'}</td>
-                            <td className="px-3 py-3"><span className="text-[9px] font-bold text-slate-400 capitalize tracking-widest">{item.category}</span></td>
-                            <td className={`px-3 py-3 whitespace-nowrap ${isExpired ? 'text-rose-600 font-black bg-rose-50' : 'text-slate-500 font-medium'}`}>
+                            <td className="px-3 py-3 text-slate-500 text-[10px] whitespace-nowrap overflow-hidden text-ellipsis">{item.vendor || '-'}</td>
+                            <td className="px-3 py-3"><span className="text-[10px] font-medium text-slate-500 capitalize tracking-wide">{item.category}</span></td>
+                            <td className={`px-3 py-3 whitespace-nowrap ${isExpired ? 'text-rose-600 font-bold bg-rose-50' : 'text-slate-600 font-medium'}`}>
                               {item.expiryDate ? <>{new Date(item.expiryDate).toLocaleDateString()}{isExpired && <span className="ml-1 text-[8px] uppercase tracking-tighter">(EXP)</span>}</> : '-'}
                             </td>
                             <td className="px-3 py-3"><span className="text-emerald-600 font-bold text-[9px] whitespace-nowrap border border-emerald-100 px-2 py-0.5 rounded-lg bg-emerald-50/30">{item.roomName}</span></td>
@@ -396,16 +396,16 @@ const MasterInventory: React.FC<MasterInventoryProps> = ({
                       const displayLocation = currentRoom ? currentRoom.name : h.location;
                       return (
                         <tr key={h.id} className="hover:bg-purple-50/20 transition-colors">
-                          <td className="px-6 py-5 text-slate-400 whitespace-nowrap text-xs">{formatDate(h.timestamp)}</td>
+                          <td className="px-6 py-5 text-slate-500 whitespace-nowrap text-xs">{formatDate(h.timestamp)}</td>
                           <td className="px-6 py-5 font-bold text-slate-800">{h.productName}</td>
                           <td className="px-6 py-5 text-slate-500 text-xs">#{h.brand || '-'}</td>
-                          <td className="px-6 py-5 text-slate-400 font-mono text-[10px]">{h.code || '-'}</td>
+                          <td className="px-6 py-5 text-slate-500 text-[10px]">{h.code || '-'}</td>
                           <td className="px-6 py-5 text-slate-600 font-medium text-xs">{h.vendor || '-'}</td>
-                          <td className="px-6 py-5 font-black text-[#9b59b6] text-center">{h.qty}</td>
+                          <td className="px-6 py-5 font-bold text-[#9b59b6] text-center">{h.qty}</td>
                           <td className="px-6 py-5 text-slate-500 font-semibold">${h.unitPrice.toFixed(2)}</td>
                           <td className="px-6 py-5 text-[#c0392b] font-black tracking-tight">${h.totalPrice.toFixed(2)}</td>
                           <td className="px-6 py-5 text-emerald-600 font-bold text-[10px] whitespace-nowrap">{displayLocation}</td>
-                          <td className="px-6 py-5"><span className="text-[9px] font-bold text-slate-400 capitalize tracking-widest">{h.category}</span></td>
+                          <td className="px-6 py-5"><span className="text-[10px] font-medium text-slate-500 capitalize tracking-wide">{h.category}</span></td>
                         </tr>
                       );
                     }) : (
