@@ -405,7 +405,7 @@ const MasterInventory: React.FC<MasterInventoryProps> = ({
                                         {bExpired && <span className="ml-1 text-[9px] uppercase font-black">(EXP)</span>}
                                         {bSoon && !bExpired && <span className="ml-1 text-[9px] uppercase font-black">(SOON)</span>}
                                       </td>
-                                      <td className="px-6 py-2 text-[11px] text-slate-400">—</td>
+                                      <td className="px-6 py-2 text-[11px] text-slate-400"></td>
                                     </tr>
                                   );
                                 })
