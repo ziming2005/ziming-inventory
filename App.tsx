@@ -27,6 +27,50 @@ type ProfileRow = {
   phone?: string | null;
   position?: string | null;
   company_name?: string | null;
+  avatar_url?: string | null;
+  background_url?: string | null;
+};
+
+const PROFILE_IMAGE_STORAGE_PREFIX = 'denta_profile_images_';
+const PROFILE_IMAGE_BUCKET = 'profile-media';
+
+const loadUserImages = (userId: string) => {
+  try {
+    const raw = localStorage.getItem(`${PROFILE_IMAGE_STORAGE_PREFIX}${userId}`);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return {
+      avatarUrl: parsed.avatarUrl || undefined,
+      backgroundUrl: parsed.backgroundUrl || undefined
+    };
+  } catch (err) {
+    console.error('Failed to load profile images', err);
+    return {};
+  }
+};
+
+const persistUserImages = (userId: string, images: { avatarUrl?: string; backgroundUrl?: string }) => {
+  try {
+    const payload = {
+      avatarUrl: images.avatarUrl || null,
+      backgroundUrl: images.backgroundUrl || null
+    };
+    localStorage.setItem(`${PROFILE_IMAGE_STORAGE_PREFIX}${userId}`, JSON.stringify(payload));
+  } catch (err) {
+    console.error('Failed to save profile images', err);
+  }
+};
+
+const uploadProfileImage = async (file: File, userId: string, type: 'avatar' | 'background') => {
+  const ext = file.name.split('.').pop() || 'jpg';
+  const path = `profiles/${userId}/${type}-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from(PROFILE_IMAGE_BUCKET).upload(path, file, {
+    cacheControl: '3600',
+    upsert: true,
+  });
+  if (error) throw error;
+  const { data } = supabase.storage.from(PROFILE_IMAGE_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
 };
 
 const summarizeBatches = (batches: ItemBatch[]) => {
@@ -193,6 +237,7 @@ const App: React.FC = () => {
     setSupabaseUserId(userId);
 
     const { data: authUser } = await supabase.auth.getUser();
+    const storedImages = loadUserImages(userId);
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
@@ -245,7 +290,9 @@ const App: React.FC = () => {
         accountType: accountTypeValue as any,
         phone: (profileSource as any).phone || '',
         position: (profileSource as any).position || '',
-        companyName: (profileSource as any).companyName || (profileSource as any).company_name || undefined
+        companyName: (profileSource as any).companyName || (profileSource as any).company_name || undefined,
+        avatarUrl: (profileSource as any).avatar_url || storedImages.avatarUrl,
+        backgroundUrl: (profileSource as any).background_url || storedImages.backgroundUrl
       });
     }
 
@@ -292,9 +339,10 @@ const App: React.FC = () => {
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id || null;
     if (userId) setSupabaseUserId(userId);
+    const storedImages = userId ? loadUserImages(userId) : {};
 
     setIsAdmin(userProfile.accountType === 'admin');
-    setUser(userProfile);
+    setUser({ ...userProfile, ...storedImages });
     setIsAuthenticated(true);
     setCurrentView('dashboard');
     if (userId) {
@@ -305,7 +353,9 @@ const App: React.FC = () => {
         account_type: userProfile.accountType,
         phone: userProfile.phone,
         position: userProfile.position,
-        company_name: userProfile.companyName
+        company_name: userProfile.companyName,
+        avatar_url: storedImages.avatarUrl || null,
+        background_url: storedImages.backgroundUrl || null
       });
       if (error) console.error('Profile upsert error', error);
       await bootstrapUser(userId);
@@ -327,6 +377,56 @@ const App: React.FC = () => {
     setHistory([]);
     setLogs([]);
     setInventoryId(null);
+  };
+
+  const handleUpdateUserImages = async (payload: { type: 'avatar' | 'background'; file: File; previewUrl: string }) => {
+    if (!supabaseUserId) throw new Error('User is not authenticated.');
+
+    const nextAvatar = payload.type === 'avatar' ? payload.previewUrl : user?.avatarUrl;
+    const nextBackground = payload.type === 'background' ? payload.previewUrl : user?.backgroundUrl;
+    setUser(prev => prev ? { ...prev, avatarUrl: nextAvatar, backgroundUrl: nextBackground } : prev);
+
+    const remoteUrl = await uploadProfileImage(payload.file, supabaseUserId, payload.type);
+    const finalAvatar = payload.type === 'avatar' ? remoteUrl : (user?.avatarUrl || null);
+    const finalBackground = payload.type === 'background' ? remoteUrl : (user?.backgroundUrl || null);
+
+    setUser(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, avatarUrl: finalAvatar || undefined, backgroundUrl: finalBackground || undefined };
+      persistUserImages(supabaseUserId, {
+        avatarUrl: next.avatarUrl,
+        backgroundUrl: next.backgroundUrl
+      });
+      return next;
+    });
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        avatar_url: finalAvatar,
+        background_url: finalBackground
+      })
+      .eq('user_id', supabaseUserId);
+
+    if (updateError) {
+      console.error('Failed to update profile images, attempting upsert', updateError);
+      const fallback = {
+        user_id: supabaseUserId,
+        email: user?.email || '',
+        name: user?.name || '',
+        account_type: user?.accountType || 'individual',
+        phone: user?.phone || '',
+        position: user?.position || '',
+        company_name: user?.companyName || null,
+        avatar_url: finalAvatar,
+        background_url: finalBackground
+      };
+      const { error: upsertError } = await supabase.from('profiles').upsert(fallback, { onConflict: 'user_id' });
+      if (upsertError) {
+        console.error('Failed to persist profile images (upsert)', upsertError);
+        throw upsertError;
+      }
+    }
   };
 
   const addRoom = (x: number, y: number) => {
@@ -564,6 +664,7 @@ const App: React.FC = () => {
         onProfileClick={() => setCurrentView('profile')} 
         onDashboardClick={() => setCurrentView('dashboard')}
         userInitials={userInitials}
+        userAvatarUrl={user?.avatarUrl}
       />
 
       <div className="max-w-[1600px] mx-auto w-full flex flex-col gap-8 px-6 md:px-16 lg:px-32 py-8">
@@ -600,7 +701,8 @@ const App: React.FC = () => {
               <ProfilePage 
                 user={user} 
                 onLogout={handleLogout} 
-                onBack={() => setCurrentView('dashboard')} 
+                onBack={() => setCurrentView('dashboard')}
+                onUpdateImages={handleUpdateUserImages}
               />
             )
           )}

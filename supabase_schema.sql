@@ -8,6 +8,8 @@ create table if not exists public.profiles (
   phone text,
   position text,
   company_name text,
+  avatar_url text,
+  background_url text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

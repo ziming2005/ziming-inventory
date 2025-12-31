@@ -64,4 +64,6 @@ export interface UserProfile {
   phone: string;
   position: string;
   companyName?: string;
+  avatarUrl?: string;
+  backgroundUrl?: string;
 }

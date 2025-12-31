@@ -4,12 +4,14 @@ interface HeaderProps {
   onProfileClick?: () => void;
   onDashboardClick?: () => void;
   userInitials?: string;
+  userAvatarUrl?: string;
 }
 
 const Header: React.FC<HeaderProps> = ({
   onProfileClick,
   onDashboardClick,
   userInitials = 'U',
+  userAvatarUrl,
 }) => {
   return (
     <header className="bg-white shadow-sm px-6 md:px-16 py-4 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 w-full z-50">
@@ -36,9 +38,17 @@ const Header: React.FC<HeaderProps> = ({
             className="flex items-center gap-2 group p-1 rounded-full hover:bg-slate-50 transition-all border border-transparent hover:border-slate-100"
             title="Account Profile"
           >
-            <div className="w-10 h-10 rounded-full bg-[#004aad] flex items-center justify-center text-white font-black text-sm shadow-md group-hover:shadow-blue-200 transition-all">
-              {userInitials}
-            </div>
+            {userAvatarUrl ? (
+              <img
+                src={userAvatarUrl}
+                alt="Profile avatar"
+                className="w-10 h-10 rounded-full object-cover shadow-md group-hover:shadow-blue-200 transition-all border border-[#004aad]/10"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-[#004aad] flex items-center justify-center text-white font-black text-sm shadow-md group-hover:shadow-blue-200 transition-all">
+                {userInitials}
+              </div>
+            )}
             <div className="hidden md:block text-left mr-2">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
                 Account
