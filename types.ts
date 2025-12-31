@@ -67,3 +67,8 @@ export interface UserProfile {
   avatarUrl?: string;
   backgroundUrl?: string;
 }
+
+export interface CatPosition {
+  x: number;
+  y: number;
+}

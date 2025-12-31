@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Room, Item, ActivityLog, PurchaseHistory, UserProfile, ItemBatch } from './types';
+import { Room, Item, ActivityLog, PurchaseHistory, UserProfile, ItemBatch, CatPosition } from './types';
 import { PRESET_BLUEPRINTS } from './constants';
 import MasterInventory from './MasterInventory';
 import Header from './Header';
@@ -17,6 +17,7 @@ type ManagedInventory = {
   history: PurchaseHistory[];
   logs: ActivityLog[];
   blueprint?: string | null;
+  catPosition?: CatPosition | null;
 };
 
 type ProfileRow = {
@@ -165,6 +166,7 @@ const App: React.FC = () => {
   const [isLocked, setIsLocked] = useState(false);
   const [isAddMode, setIsAddMode] = useState(false);
   const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [catPosition, setCatPosition] = useState<CatPosition>({ x: 20, y: 20 });
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -223,7 +225,8 @@ const App: React.FC = () => {
           rooms: inv.data?.rooms || [],
           history: inv.data?.history || [],
           logs: inv.data?.logs || [],
-          blueprint: inv.data?.blueprint || inv.blueprint || PRESET_BLUEPRINTS[0].url
+          blueprint: inv.data?.blueprint || inv.blueprint || PRESET_BLUEPRINTS[0].url,
+          catPosition: inv.data?.catPosition || null
         }));
         setManagedInventories(prepared);
       }
@@ -315,11 +318,13 @@ const App: React.FC = () => {
       setHistory(invData.history || []);
       setLogs(invData.logs || []);
       setBlueprint(invData.blueprint || (inventory as any).blueprint || PRESET_BLUEPRINTS[0].url);
+      if (invData.catPosition) setCatPosition(invData.catPosition);
     } else {
       setRooms([]);
       setHistory([]);
       setLogs([]);
       setBlueprint(PRESET_BLUEPRINTS[0].url);
+      setCatPosition({ x: 20, y: 20 });
     }
 
     const isUserAdmin = accountTypeValue === 'admin';
@@ -611,7 +616,7 @@ const App: React.FC = () => {
       if (!userId) return;
       const uniqueLogs = Array.from(new Map(logs.map(l => [l.id, l])).values());
       const uniqueHistory = Array.from(new Map(history.map(h => [h.id, h])).values());
-      const payload = { rooms, history: uniqueHistory, logs: uniqueLogs, blueprint };
+      const payload = { rooms, history: uniqueHistory, logs: uniqueLogs, blueprint, catPosition };
       const record: any = { user_id: userId, data: payload, blueprint };
 
       if (inventoryId) record.id = inventoryId;
@@ -632,7 +637,7 @@ const App: React.FC = () => {
       if (isAdmin) return;
       sync();
     }
-  }, [rooms, history, logs, blueprint, isAuthenticated, isBootstrapped, supabaseUserId, inventoryId, isAdmin]);
+  }, [rooms, history, logs, blueprint, catPosition, isAuthenticated, isBootstrapped, supabaseUserId, inventoryId, isAdmin]);
 
   const adminRooms = useMemo(() => managedInventories.flatMap((inv) => inv.rooms || []), [managedInventories]);
   const adminHistory = useMemo(() => managedInventories.flatMap((inv) => inv.history || []), [managedInventories]);
@@ -685,6 +690,8 @@ const App: React.FC = () => {
                 onSelectRoom={setActiveRoomId}
                 onUpdateRooms={setRooms}
                 onSelectTemplate={setBlueprint}
+                catPosition={catPosition}
+                onCatPositionChange={setCatPosition}
               />
 
               <MasterInventory 

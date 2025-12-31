@@ -295,11 +295,12 @@ const MasterInventory: React.FC<MasterInventoryProps> = ({
                           const batches = item.batches && item.batches.length ? item.batches : [{ qty: item.quantity, unitPrice: item.price, expiryDate: item.expiryDate || null }];
                           const batchKey = `${item.roomId}-${item.id}`;
                           const isOpen = !!openBatchRows[batchKey];
+                          const rowHighlight = isOpen ? 'bg-blue-200/60' : 'hover:bg-slate-50/60';
 
                           return (
                             <React.Fragment key={`${item.roomId}-${item.id}`}>
                               <tr
-                                className="hover:bg-slate-50/60 transition-colors"
+                                className={`${rowHighlight} transition-colors`}
                               >
                                 <td className="px-6 py-4 text-slate-500 whitespace-nowrap text-xs">
                                   #{item.brand || '-'}
@@ -388,7 +389,7 @@ const MasterInventory: React.FC<MasterInventoryProps> = ({
                                   const bExpired = bExpiry ? bExpiry < now : false;
                                   const bSoon = bExpiry ? !bExpired && bExpiry <= soonThreshold : false;
                                   return (
-                                    <tr key={idx} className="bg-slate-50/60">
+                                    <tr key={idx} className={`${isOpen ? 'bg-blue-100/50' : 'bg-slate-50/60'}`}>
                                       <td className="px-6 py-2 text-[11px] text-slate-400">Batch {idx + 1}</td>
                                       <td className="px-6 py-2 text-[11px] font-semibold text-slate-700"></td>
                                       <td className="px-6 py-2 text-[11px] text-slate-400"></td>

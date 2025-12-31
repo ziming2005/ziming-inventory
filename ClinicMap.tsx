@@ -12,7 +12,7 @@ import {
   MessageCircle,
   Volume2
 } from 'lucide-react';
-import { Room } from './types';
+import { Room, CatPosition } from './types';
 import { PRESET_BLUEPRINTS } from './constants';
 
 interface ClinicMapProps {
@@ -29,6 +29,8 @@ interface ClinicMapProps {
   onSelectRoom: (id: number) => void;
   onUpdateRooms: (rooms: Room[]) => void;
   onSelectTemplate: (url: string) => void;
+  catPosition: CatPosition;
+  onCatPositionChange: (pos: CatPosition) => void;
 }
 
 const CAT_QUOTES = [
@@ -50,13 +52,14 @@ const CAT_SPEED = 0.08; // Seconds per % of distance
 const ClinicMap: React.FC<ClinicMapProps> = ({
   rooms, blueprint, isLocked, isAddMode, isDeleteMode,
   onSetLocked, onSetAddMode, onSetDeleteMode,
-  onAddRoom, onDeleteRoom, onSelectRoom, onUpdateRooms, onSelectTemplate
+  onAddRoom, onDeleteRoom, onSelectRoom, onUpdateRooms, onSelectTemplate,
+  catPosition, onCatPositionChange
 }) => {
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [draggedRoomId, setDraggedRoomId] = useState<number | null>(null);
   
   // Cat Mascot State
-  const [catPos, setCatPos] = useState({ x: 20, y: 20 });
+  const [catPos, setCatPos] = useState({ x: catPosition.x, y: catPosition.y });
   const [isWalking, setIsWalking] = useState(false);
   const [facingLeft, setFacingLeft] = useState(true);
   const [showBubble, setShowBubble] = useState(false);
@@ -78,6 +81,10 @@ const ClinicMap: React.FC<ClinicMapProps> = ({
   const wasDraggingRef = useRef(false);
   const justDraggedRef = useRef(false);
   const dragStartPosRef = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    setCatPos({ x: catPosition.x, y: catPosition.y });
+  }, [catPosition.x, catPosition.y]);
 
   useEffect(() => {
     audioRef.current = new Audio(MEOW_SOUND_URL);
@@ -149,6 +156,7 @@ const ClinicMap: React.FC<ClinicMapProps> = ({
       setFacingLeft(targetX < currentVisualPos.x);
       setWalkDuration(calculatedDuration);
       setCatPos({ x: targetX, y: targetY });
+      onCatPositionChange({ x: targetX, y: targetY });
       setIsWalking(true);
       
       if (walkTimeoutRef.current) clearTimeout(walkTimeoutRef.current);
