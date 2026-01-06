@@ -165,7 +165,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           expiryDate: item.expiryDate || '',
           location: room.name,
           clinic: profileMap.get(inv.userId)?.company_name || user.companyName || 'My Dental Clinic',
-          userId: inv.userId
+          userId: inv.userId,
+          batches: item.batches
         }))
       ))
     );
@@ -187,6 +188,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         code: h.code,
         qty: h.qty,
         unitPrice: h.unitPrice,
+        uom: h.uom,
+        expiryDate: h.expiryDate,
         userId: inv.userId
       }))
     ));
@@ -312,20 +315,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const renderCategoryChart = () => {
-    const computeNiceSteps = (maxValue: number) => {
+    const computeNiceSteps = (maxValue: number, targetTicks = 5) => {
       if (!isFinite(maxValue) || maxValue <= 0) return [0, 1, 2, 3, 4];
-      const roughStep = maxValue / 4;
-      const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
-      const residual = roughStep / magnitude;
-      let niceResidual;
-      if (residual <= 1) niceResidual = 1;
-      else if (residual <= 2) niceResidual = 2;
-      else if (residual <= 5) niceResidual = 5;
-      else niceResidual = 10;
-      const step = niceResidual * magnitude;
-      const steps = [0, step, step * 2, step * 3, step * 4];
-      const top = steps[steps.length - 1];
-      if (top < maxValue) steps.push(step * 5);
+
+      const niceNumber = (value: number, round: boolean) => {
+        const exponent = Math.floor(Math.log10(value));
+        const fraction = value / Math.pow(10, exponent);
+        let niceFraction;
+        if (round) {
+          if (fraction < 1.5) niceFraction = 1;
+          else if (fraction < 3) niceFraction = 2;
+          else if (fraction < 7) niceFraction = 5;
+          else niceFraction = 10;
+        } else {
+          if (fraction <= 1) niceFraction = 1;
+          else if (fraction <= 2) niceFraction = 2;
+          else if (fraction <= 5) niceFraction = 5;
+          else niceFraction = 10;
+        }
+        return niceFraction * Math.pow(10, exponent);
+      };
+
+      const range = niceNumber(maxValue, false);
+      const step = niceNumber(range / (targetTicks - 1), true);
+      const niceMax = Math.ceil(maxValue / step) * step;
+
+      const steps: number[] = [];
+      for (let v = 0; v <= niceMax; v += step) {
+        steps.push(v);
+        if (steps.length > targetTicks + 2) break; // safety to avoid runaway loops
+      }
+      if (steps[steps.length - 1] !== niceMax) steps.push(niceMax);
+
       return steps;
     };
 

@@ -22,7 +22,7 @@ interface RoomModalProps {
   onReceive: (roomId: number, itemData: Partial<Item>, qty: number, price: number, purchaseDate: string, expiry?: string) => void;
   onUpdateQty: (roomId: number, itemId: number, delta: number) => void;
   onUpdateBatchQty: (roomId: number, itemId: number, batchIndex: number, delta: number) => void;
-  onTransfer: (fromRoomId: number, toRoomId: number, itemId: number) => void;
+  onTransfer: (fromRoomId: number, toRoomId: number, itemId: number, quantity: number) => void;
   onDeleteItem: (roomId: number, itemId: number) => void;
 }
 
@@ -41,6 +41,10 @@ const RoomModal: React.FC<RoomModalProps> = ({ room, allRooms, logs, onClose, on
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [roomSearch, setRoomSearch] = useState('');
   const [openBatchRows, setOpenBatchRows] = useState<Record<number, boolean>>({});
+  const [transferContext, setTransferContext] = useState<{ item: Item; toRoomId: number } | null>(null);
+  const [transferQty, setTransferQty] = useState(0);
+  const targetRoomName = transferContext ? (allRooms.find(r => r.id === transferContext.toRoomId)?.name || 'Selected room') : '';
+  const [deleteContext, setDeleteContext] = useState<{ item: Item; batchIndex?: number } | null>(null);
 
   const filteredItems = useMemo(() => {
     return room.items.filter(i => 
@@ -94,6 +98,54 @@ const RoomModal: React.FC<RoomModalProps> = ({ room, allRooms, logs, onClose, on
     setSelectedItemIdx('');
     setIsReceiving(false);
   };
+
+  const openTransferModal = (item: Item, toRoomId: number) => {
+    setTransferContext({ item, toRoomId });
+    setTransferQty(item.quantity);
+  };
+
+  const handleRelocateSelect = (item: Item, value: string) => {
+    if (value === '') return;
+    const targetId = Number(value);
+    if (!Number.isFinite(targetId) || targetId === room.id) return;
+    openTransferModal(item, targetId);
+  };
+
+  const confirmTransfer = () => {
+    if (!transferContext) return;
+    const maxQty = Math.max(transferContext.item.quantity, 0);
+    const qtyToMove = Math.min(Math.max(transferQty || 0, 1), maxQty);
+    onTransfer(room.id, transferContext.toRoomId, transferContext.item.id, qtyToMove);
+    setTransferContext(null);
+    setTransferQty(0);
+  };
+
+  const cancelTransfer = () => {
+    setTransferContext(null);
+    setTransferQty(0);
+  };
+
+  const requestDeleteItem = (item: Item) => {
+    setDeleteContext({ item });
+  };
+
+  const requestDeleteBatch = (item: Item, batchIndex: number) => {
+    setDeleteContext({ item, batchIndex });
+  };
+
+  const confirmDelete = () => {
+    if (!deleteContext) return;
+    if (typeof deleteContext.batchIndex === 'number') {
+      const targetBatch = deleteContext.item.batches?.[deleteContext.batchIndex];
+      const delta = targetBatch ? -targetBatch.qty : 0;
+      onUpdateBatchQty(room.id, deleteContext.item.id, deleteContext.batchIndex, delta);
+    } else {
+      onDeleteItem(room.id, deleteContext.item.id);
+    }
+    setDeleteContext(null);
+  };
+
+  const cancelDelete = () => setDeleteContext(null);
 
   // Existing item pricing preview
   const selectedExistingItem = receiveMode === 'existing' && selectedItemIdx !== '' ? room.items[parseInt(selectedItemIdx)] : null;
@@ -333,8 +385,9 @@ const RoomModal: React.FC<RoomModalProps> = ({ room, allRooms, logs, onClose, on
                                   ) : (
                                     <div className="flex items-center justify-center gap-2">
                                       <button
-                                        onClick={() => onUpdateQty(room.id, item.id, -1)}
-                                        className="w-7 h-7 flex items-center justify-center border border-slate-200 rounded-full hover:bg-slate-100 text-slate-400 hover:text-rose-500 transition-colors"
+                                        onClick={() => item.quantity > 1 && onUpdateQty(room.id, item.id, -1)}
+                                        disabled={item.quantity <= 1}
+                                        className={`w-7 h-7 flex items-center justify-center border border-slate-200 rounded-full transition-colors ${item.quantity <= 1 ? 'text-slate-300 cursor-not-allowed bg-slate-50' : 'hover:bg-slate-100 text-slate-400 hover:text-rose-500'}`}
                                         aria-label="Decrease quantity"
                                         title="Decrease"
                                       >
@@ -409,7 +462,7 @@ const RoomModal: React.FC<RoomModalProps> = ({ room, allRooms, logs, onClose, on
                                   <button
                                     type="button"
                                     className="ml-2 text-[10px] font-bold text-blue-600 underline"
-                                    onClick={(e) => { e.stopPropagation(); toggleBatchRow(item.id); }}
+                                onClick={(e) => { e.stopPropagation(); toggleBatchRow(item.id); }}
                                   >
                                     {isOpen ? "Hide" : "View"}
                                   </button>
@@ -418,14 +471,15 @@ const RoomModal: React.FC<RoomModalProps> = ({ room, allRooms, logs, onClose, on
 
                               <td className="px-3 py-4">
                                 <select
-                                  className="bg-transparent text-xs font-bold text-emerald-600 tracking-tight focus:outline-none cursor-pointer w-full text-ellipsis"
+                                  className="bg-white text-xs font-bold text-slate-700 border border-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer w-full text-ellipsis shadow-sm"
                                   value={room.id}
-                                  onChange={(e) =>
-                                    onTransfer(room.id, Number(e.target.value), item.id)
-                                  }
+                                  onChange={(e) => handleRelocateSelect(item, e.target.value)}
                                   title="Transfer location"
                                 >
                                   <option value={room.id}>{room.name}</option>
+                                  <option value="" disabled>
+                                    -- Move to --
+                                  </option>
                                   {allRooms
                                     .filter((r) => r.id !== room.id)
                                     .map((r) => (
@@ -437,7 +491,7 @@ const RoomModal: React.FC<RoomModalProps> = ({ room, allRooms, logs, onClose, on
                               </td>
                               <td className="px-3 py-4 text-center">
                                 <button
-                                  onClick={() => onDeleteItem(room.id, item.id)}
+                                  onClick={() => requestDeleteItem(item)}
                                   className="text-slate-300 hover:text-rose-600 transition-colors"
                                   title="Delete item"
                                   aria-label="Delete item"
@@ -458,8 +512,9 @@ const RoomModal: React.FC<RoomModalProps> = ({ room, allRooms, logs, onClose, on
                                     <td className="px-3 py-2 text-[11px] font-bold text-slate-800 text-center">
                                       <div className="flex items-center justify-center gap-2">
                                         <button
-                                          onClick={() => onUpdateBatchQty(room.id, item.id, idx, -1)}
-                                          className="w-6 h-6 flex items-center justify-center border border-slate-200 rounded-full hover:bg-slate-100 text-slate-400 hover:text-rose-500 transition-colors"
+                                          onClick={() => b.qty > 1 && onUpdateBatchQty(room.id, item.id, idx, -1)}
+                                          disabled={b.qty <= 1}
+                                          className={`w-6 h-6 flex items-center justify-center border border-slate-200 rounded-full transition-colors ${b.qty <= 1 ? 'text-slate-300 cursor-not-allowed bg-slate-50' : 'hover:bg-slate-100 text-slate-400 hover:text-rose-500'}`}
                                           aria-label="Decrease batch quantity"
                                           title="Decrease batch quantity"
                                         >
@@ -493,7 +548,7 @@ const RoomModal: React.FC<RoomModalProps> = ({ room, allRooms, logs, onClose, on
                                     <td className="px-3 py-2 text-[11px] text-slate-400"></td>
                                     <td className="px-3 py-2 text-[11px] text-center">
                                       <button
-                                        onClick={() => onUpdateBatchQty(room.id, item.id, idx, -b.qty)}
+                                        onClick={() => requestDeleteBatch(item, idx)}
                                         className="text-slate-300 hover:text-rose-600 transition-colors"
                                         title="Delete batch"
                                         aria-label="Delete batch"
@@ -562,6 +617,74 @@ const RoomModal: React.FC<RoomModalProps> = ({ room, allRooms, logs, onClose, on
           </div>
         </div>
       </div>
+
+      {transferContext && (
+        <div className="fixed inset-0 bg-black/50 z-[110] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4 border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div>
+              <p className="text-xl font-semibold text-slate-700">
+                Transfer "{transferContext.item.name}" to {targetRoomName}
+              </p>
+              <p className="text-sm text-slate-600 mt-1">How many do you want to transfer?</p>
+              <p className="text-[12px] font-bold text-emerald-600 mt-1">Available: {transferContext.item.quantity}</p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Quantity</label>
+              <input
+                type="number"
+                min={1}
+                max={transferContext.item.quantity}
+                value={transferQty || ''}
+                onChange={(e) => setTransferQty(Number(e.target.value))}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-semibold focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={cancelTransfer}
+                className="px-4 py-2 rounded-full bg-slate-100 text-slate-600 font-bold text-sm hover:bg-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmTransfer}
+                className="px-4 py-2 rounded-full bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-colors"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteContext && (
+        <div className="fixed inset-0 bg-black/50 z-[120] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4 border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div>
+              <p className="text-xl font-semibold text-slate-700">
+                {deleteContext.batchIndex !== undefined
+                  ? `Delete Batch ${deleteContext.batchIndex + 1} of "${deleteContext.item.name}" ?`
+                  : `Delete "${deleteContext.item.name}" ?`}
+              </p>
+              <p className="text-sm text-slate-500 mt-1">This action cannot be undone.</p>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={cancelDelete}
+                className="px-4 py-2 rounded-full bg-slate-100 text-slate-600 font-bold text-sm hover:bg-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 rounded-full bg-rose-600 text-white font-bold text-sm hover:bg-rose-700 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

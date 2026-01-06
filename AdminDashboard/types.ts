@@ -36,6 +36,8 @@ export interface MockGlobalOrder {
   code?: string;
   qty?: number;
   unitPrice?: number;
+  uom?: string;
+  expiryDate?: string | null;
   userId?: string;
 }
 
@@ -65,4 +67,9 @@ export interface GlobalInventoryItem {
   location: string;
   clinic: string;
   userId?: string; // Track who owns the item for user stats
+  batches?: {
+    qty: number;
+    unitPrice: number;
+    expiryDate?: string | null;
+  }[];
 }

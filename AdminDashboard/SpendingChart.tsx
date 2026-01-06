@@ -32,6 +32,26 @@ const SpendingChart: React.FC<SpendingChartProps> = ({
   const padding = 40;
   const chartWidth = width - padding * 2;
   const chartHeight = height - padding * 2;
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
+  const tooltipRef = React.useRef<HTMLDivElement>(null);
+
+  const tooltipStyle = React.useMemo(() => {
+    const tooltipWidth = tooltipRef.current?.offsetWidth ?? 220;
+    const wrapperWidth = wrapperRef.current?.offsetWidth ?? 0;
+    const paddingOffset = 16;
+    const willOverflowRight = wrapperWidth > 0 && (mousePos.x + tooltipWidth + paddingOffset > wrapperWidth);
+    const translateX = willOverflowRight ? `calc(-100% - ${paddingOffset}px)` : `${paddingOffset}px`;
+    const clampedLeft = wrapperWidth
+      ? Math.min(Math.max(mousePos.x, paddingOffset), wrapperWidth - paddingOffset)
+      : mousePos.x;
+
+    return {
+      left: `${clampedLeft}px`,
+      top: `${mousePos.y}px`,
+      transform: `translate(${translateX}, -50%)`,
+      willChange: 'left, top'
+    };
+  }, [mousePos.x, mousePos.y, hoveredDay]);
 
   const getPath = (dataArr: number[], color: string, fillId: string) => {
     if (!dataArr || dataArr.length === 0) return null;
@@ -63,7 +83,7 @@ const SpendingChart: React.FC<SpendingChartProps> = ({
   const hoveredX = hoveredDay !== null ? padding + (hoveredDay / 30) * chartWidth : null;
 
   return (
-    <div className="relative w-full overflow-visible">
+    <div className="relative w-full overflow-visible" ref={wrapperRef}>
       <svg 
         ref={chartRef}
         width="100%" 
@@ -84,6 +104,17 @@ const SpendingChart: React.FC<SpendingChartProps> = ({
           if (!screenCTM) return;
           
           const svgP = pt.matrixTransform(screenCTM.inverse());
+
+          // Ignore moves outside the plot area to prevent stray tooltips
+          if (
+            svgP.x < padding ||
+            svgP.x > width - padding ||
+            svgP.y < padding ||
+            svgP.y > height - padding
+          ) {
+            onHoverDay(null);
+            return;
+          }
           
           // Calculate which day we are over based on SVG internal units
           const chartX = svgP.x - padding;
@@ -130,13 +161,9 @@ const SpendingChart: React.FC<SpendingChartProps> = ({
 
       {hoveredDay !== null && (
         <div 
+          ref={tooltipRef}
           className="absolute pointer-events-none z-[100] animate-in fade-in zoom-in-95 duration-200"
-          style={{ 
-            left: `${mousePos.x}px`, 
-            top: `${mousePos.y}px`, 
-            transform: 'translate(15px, -50%)',
-            willChange: 'left, top'
-          }}
+          style={tooltipStyle}
         >
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 min-w-[200px]">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Day {hoveredDay + 1}</p>

@@ -541,7 +541,10 @@ const App: React.FC = () => {
         ...r,
         items: r.items.map(i => {
           if (i.id !== itemId) return i;
-          const adjusted = adjustBatchesWithDelta(i, delta);
+          if (delta < 0 && i.quantity <= 1) return i;
+          const safeDelta = delta < 0 ? Math.max(delta, -(i.quantity - 1)) : delta;
+          if (safeDelta === 0) return i;
+          const adjusted = adjustBatchesWithDelta(i, safeDelta);
           if (adjusted.quantity !== i.quantity) {
              addActivity(roomId, r.name, 'edit', `Adjusted qty of "${i.name}" to ${adjusted.quantity}`);
           }
@@ -562,7 +565,10 @@ const App: React.FC = () => {
           const batches = normalized.batches ? normalized.batches.map(b => ({ ...b })) : [];
           if (batchIndex < 0 || batchIndex >= batches.length) return normalized;
           const b = batches[batchIndex];
-          const newQty = Math.max(0, b.qty + delta);
+          if (delta < 0 && b.qty <= 1) return normalized;
+          const safeDelta = delta < 0 ? Math.max(delta, -(b.qty - 1)) : delta;
+          if (safeDelta === 0) return normalized;
+          const newQty = Math.max(0, b.qty + safeDelta);
           batches[batchIndex] = { ...b, qty: newQty };
           const filtered = batches.filter(x => x.qty > 0);
           const { totalQty, avgPrice, earliestExpiry } = summarizeBatches(filtered);
@@ -588,19 +594,70 @@ const App: React.FC = () => {
     }));
   };
 
-  const moveItem = (fromRoomId: number, toRoomId: number, itemId: number) => {
+  const splitBatchesForTransfer = (batches: ItemBatch[] | undefined, qtyToMove: number) => {
+    if (!batches || batches.length === 0) return { kept: [] as ItemBatch[], moved: [] as ItemBatch[] };
+    let remaining = qtyToMove;
+    const kept: ItemBatch[] = [];
+    const moved: ItemBatch[] = [];
+
+    for (const batch of batches) {
+      if (remaining <= 0) {
+        kept.push(batch);
+        continue;
+      }
+      const move = Math.min(batch.qty, remaining);
+      if (move > 0) {
+        moved.push({ ...batch, qty: move });
+      }
+      const leftover = batch.qty - move;
+      if (leftover > 0) {
+        kept.push({ ...batch, qty: leftover });
+      }
+      remaining -= move;
+    }
+
+    return { kept, moved };
+  };
+
+  const moveItem = (fromRoomId: number, toRoomId: number, itemId: number, quantity: number) => {
     const fromRoom = rooms.find(r => r.id === fromRoomId);
     const toRoom = rooms.find(r => r.id === toRoomId);
     const item = fromRoom?.items.find(i => i.id === itemId);
     if (!fromRoom || !toRoom || !item) return;
 
+    const qtyToMove = Math.min(Math.max(quantity || 0, 1), item.quantity);
+    const remainingQty = item.quantity - qtyToMove;
+    const { kept, moved } = splitBatchesForTransfer(item.batches, qtyToMove);
+    const movedItemId = remainingQty > 0 ? Date.now() : item.id;
+
+    const movedItem = {
+      ...item,
+      id: movedItemId,
+      quantity: qtyToMove,
+      batches: moved.length ? moved : item.batches,
+      expiryDate: moved.length && moved[0]?.expiryDate ? moved[0].expiryDate : item.expiryDate
+    };
+
+    const remainingItem = remainingQty > 0 ? {
+      ...item,
+      quantity: remainingQty,
+      batches: kept.length ? kept : item.batches,
+      expiryDate: kept.length && kept[0]?.expiryDate ? kept[0].expiryDate : item.expiryDate
+    } : null;
+
     setRooms(prev => prev.map(r => {
-      if (r.id === fromRoomId) return { ...r, items: r.items.filter(i => i.id !== itemId) };
-      if (r.id === toRoomId) return { ...r, items: [...r.items, item] };
+      if (r.id === fromRoomId) {
+        const updatedItems = r.items.flatMap(i => {
+          if (i.id !== itemId) return [i];
+          return remainingItem ? [remainingItem] : [];
+        });
+        return { ...r, items: updatedItems };
+      }
+      if (r.id === toRoomId) return { ...r, items: [...r.items, movedItem] };
       return r;
     }));
-    addActivity(fromRoomId, fromRoom.name, 'transfer_out', `Transferred "${item.name}" to ${toRoom.name}`);
-    addActivity(toRoomId, toRoom.name, 'transfer_in', `Received "${item.name}" from ${fromRoom.name}`);
+    addActivity(fromRoomId, fromRoom.name, 'transfer_out', `Transferred ${qtyToMove} ${item.uom} of "${item.name}" to ${toRoom.name}`);
+    addActivity(toRoomId, toRoom.name, 'transfer_in', `Received ${qtyToMove} ${item.uom} of "${item.name}" from ${fromRoom.name}`);
   };
 
   const activeRoom = useMemo(() => rooms.find(r => r.id === activeRoomId), [rooms, activeRoomId]);
@@ -694,15 +751,16 @@ const App: React.FC = () => {
                 onCatPositionChange={setCatPosition}
               />
 
-              <MasterInventory 
-                rooms={rooms} 
-                history={history} 
-                logs={logs}
-                onReceive={receiveStock}
-                onUpdateQty={updateItemQty}
-                onTransfer={moveItem}
-              />
-            </>
+          <MasterInventory 
+            rooms={rooms} 
+            history={history} 
+            logs={logs}
+            onReceive={receiveStock}
+            onUpdateQty={updateItemQty}
+            onTransfer={moveItem}
+            onDeleteItem={deleteItem}
+          />
+        </>
           ) : (
             user && (
               <ProfilePage 

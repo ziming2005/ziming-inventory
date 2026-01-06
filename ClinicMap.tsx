@@ -57,6 +57,7 @@ const ClinicMap: React.FC<ClinicMapProps> = ({
 }) => {
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [draggedRoomId, setDraggedRoomId] = useState<number | null>(null);
+  const activeTemplate = PRESET_BLUEPRINTS.find(t => t.url === blueprint);
   
   // Cat Mascot State
   const [catPos, setCatPos] = useState({ x: catPosition.x, y: catPosition.y });
@@ -269,7 +270,7 @@ const ClinicMap: React.FC<ClinicMapProps> = ({
           <div className="h-6 w-px bg-slate-200" />
           <div className="flex items-center gap-3 relative" ref={templateMenuRef}>
             <button onClick={() => setShowTemplateMenu(!showTemplateMenu)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm tracking-wide">
-              <Layout className="w-4 h-4 text-emerald-600" /> Select Template <ChevronDown className={`w-4 h-4 transition-transform ${showTemplateMenu ? 'rotate-180' : ''}`} />
+              <Layout className="w-4 h-4 text-emerald-600" /> {activeTemplate ? activeTemplate.name : 'Select Template'} <ChevronDown className={`w-4 h-4 transition-transform ${showTemplateMenu ? 'rotate-180' : ''}`} />
             </button>
             {showTemplateMenu && (
               <div className="absolute top-full right-0 mt-3 w-72 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[60] overflow-hidden animate-in fade-in zoom-in-95 duration-100">
