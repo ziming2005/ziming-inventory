@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import StatCard from './StatCard';
 import { User } from './types';
+import { supabase } from '../supabaseClient';
 
 interface UserManagementProps {
   users: User[];
@@ -40,6 +41,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [avatarMap, setAvatarMap] = useState<Record<string, string>>({});
 
   const [newUser, setNewUser] = useState({
     name: '',
@@ -61,6 +63,24 @@ const UserManagement: React.FC<UserManagementProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    const fetchAvatars = async () => {
+      const ids = users.map(u => u.id).filter(Boolean);
+      if (!ids.length) return;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('user_id, avatar_url')
+        .in('user_id', ids);
+      if (error || !data) return;
+      const next: Record<string, string> = {};
+      data.forEach(row => {
+        if (row.avatar_url) next[row.user_id] = row.avatar_url;
+      });
+      setAvatarMap(next);
+    };
+    fetchAvatars();
+  }, [users]);
 
   const activeCount = users.filter(u => u.lastActive !== 'Suspended').length;
   const suspendedCount = users.filter(u => u.lastActive === 'Suspended').length;
@@ -212,6 +232,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
           const isSuspended = u.lastActive === 'Suspended';
           const isMenuOpen = activeMenuId === u.id;
           const userStats = userInventoryStats[u.id] || { count: 0, value: 0 };
+          const avatarUrl = avatarMap[u.id] || u.avatarUrl || null;
 
           return (
             <div 
@@ -221,13 +242,21 @@ const UserManagement: React.FC<UserManagementProps> = ({
             >
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-black text-lg transition-colors ${
-                    isSuspended ? 'bg-slate-300' :
-                    u.role === 'Admin' ? 'bg-indigo-500' :
-                    u.role === 'Dentist' ? 'bg-emerald-500' : 'bg-slate-400'
-                  }`}>
-                    {initials}
-                  </div>
+                  {avatarUrl ? (
+                    <img 
+                      src={avatarUrl} 
+                      alt={u.name} 
+                      className="w-12 h-12 rounded-full object-cover border border-slate-100 shadow-sm"
+                    />
+                  ) : (
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-black text-lg transition-colors ${
+                      isSuspended ? 'bg-slate-300' :
+                      u.role === 'Admin' ? 'bg-indigo-500' :
+                      u.role === 'Dentist' ? 'bg-emerald-500' : 'bg-slate-400'
+                    }`}>
+                      {initials}
+                    </div>
+                  )}
                   <div>
                     <h4 className={`font-bold leading-tight ${isSuspended ? 'text-slate-500' : 'text-slate-800'}`}>{u.name}</h4>
                     <div className="flex items-center gap-2 mt-1.5">

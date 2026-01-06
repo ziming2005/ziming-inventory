@@ -10,6 +10,7 @@ export interface User {
   clinicName: string;
   role: 'Admin' | 'Dentist' | 'Assistant';
   lastActive: string;
+  avatarUrl?: string | null;
 }
 
 export interface MockClinic {

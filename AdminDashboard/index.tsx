@@ -30,6 +30,8 @@ type ManagedProfile = {
   phone?: string | null;
   position?: string | null;
   company_name?: string | null;
+  updated_at?: string | null;
+  avatar_url?: string | null;
 };
 
 type ManagedInventory = {
@@ -82,7 +84,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       jobPosition: p.position || 'Member',
       clinicName: p.company_name || 'Clinic',
       role: p.account_type === 'admin' ? 'Admin' : 'Dentist',
-      lastActive: new Date().toISOString().split('T')[0],
+      lastActive: p.updated_at ? new Date(p.updated_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      avatarUrl: p.avatar_url || null,
     }));
 
     const hasAdmin = mapped.some(u => u.role === 'Admin');
@@ -97,6 +100,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         clinicName: user.companyName || 'My Dental Clinic',
         role: 'Admin',
         lastActive: new Date().toISOString().split('T')[0],
+        avatarUrl: (user as any).avatarUrl || null,
       });
     }
     return mapped;
