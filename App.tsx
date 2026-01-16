@@ -10,6 +10,8 @@ import LandingModal from './LandingModal';
 import ProfilePage from './ProfilePage';
 import AdminDashboard from './AdminDashboard';
 import { supabase } from './supabaseClient';
+import { verifySession } from './AdminDashboard/helper/verifySession';
+import { fetchSupabaseProfile } from './AdminDashboard/services/fetchSupabaseProfile';
 
 type ManagedInventory = {
   userId: string;
@@ -146,11 +148,11 @@ const adjustBatchesWithDelta = (item: Item, delta: number) => {
 
 const App: React.FC = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
+  const [activeRoomId, setActiveRoomId] = useState<number | null>(null);
   const [history, setHistory] = useState<PurchaseHistory[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [blueprint, setBlueprint] = useState<string | null>(null);
-
+  const [session, setSession] = useState<{ loggedIn: boolean; user: any } | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isBootstrapped, setIsBootstrapped] = useState<boolean>(false);
   const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
@@ -168,16 +170,57 @@ const App: React.FC = () => {
   const [catPosition, setCatPosition] = useState<CatPosition>({ x: 20, y: 20 });
   const syncInFlight = useRef(false);
 
+  const checkSession = async () => {
+    return await verifySession().then(setSession);
+  }
+
+  const fetchSession = async () => {
+    const profile = await fetchSupabaseProfile();
+    if (profile.user) {
+      await bootstrapUser(profile.user.id);
+    } else {
+      // setBlueprint(PRESET_BLUEPRINTS[0].url);
+    }
+  };
+
+  //   const fetchAdminData = async (force = false) => {
+  //   if (!force && !isAdmin) return;
+  //   setAdminDataLoading(true);
+  //   setAdminDataError(null);
+  //   try {
+  //     const { data: profiles, error: profileError } = await supabase.from('profiles').select('*');
+  //     if (profileError) {
+  //       console.error('Admin profiles fetch error', profileError);
+  //       setAdminDataError('Failed to load profiles. Please retry.');
+  //     } else {
+  //       setManagedProfiles(profiles || []);
+  //     }
+
+  //     const { data: inventories, error: inventoryError } = await supabase
+  //       .from('inventory_items')
+  //       .select('*');
+  //     if (inventoryError) {
+  //       console.error('Admin inventory fetch error', inventoryError);
+  //       setAdminDataError('Failed to load inventories. Please retry.');
+  //     } else {
+  //       const prepared: ManagedInventory[] = (inventories || []).map((inv: any) => ({
+  //         userId: inv.user_id,
+  //         rooms: inv.data?.rooms || [],
+  //         history: inv.data?.history || [],
+  //         logs: inv.data?.logs || [],
+  //         blueprint: inv.data?.blueprint || inv.blueprint || PRESET_BLUEPRINTS[0].url,
+  //         catPosition: inv.data?.catPosition || null
+  //       }));
+  //       setManagedInventories(prepared);
+  //     }
+  //   } finally {
+  //     setAdminDataLoading(false);
+  //   }
+  // };
+
   useEffect(() => {
-    const fetchSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session?.user) {
-        await bootstrapUser(data.session.user.id);
-      } else {
-        setBlueprint(PRESET_BLUEPRINTS[0].url);
-      }
-    };
-    fetchSession();
+    checkSession();
+    
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         bootstrapUser(session.user.id);
@@ -323,6 +366,7 @@ const App: React.FC = () => {
     if (profileError && profileError.code !== 'PGRST116') {
       console.error('Profile fetch error', profileError);
     }
+    console.log('prof: ',profile)
 
     let finalProfile = profile;
     if (!profile && authUser.user) {
@@ -475,8 +519,10 @@ const App: React.FC = () => {
       setManagedProfiles([]);
       setManagedInventories([]);
     }
-
-    setIsAuthenticated(!!authUser.user);
+    if(session?.user?.loggedIn){
+      setSession(session?.user)
+      setIsAuthenticated(true);
+    }
     setIsBootstrapped(true);
   };
 
@@ -600,7 +646,7 @@ const App: React.FC = () => {
     setIsAddMode(false);
   };
 
-  const deleteRoom = (id: string) => setRooms(prev => prev.filter(r => r.id !== id));
+  const deleteRoom = (id: number) => setRooms(prev => prev.filter(r => r.id !== String(id)));
 
   const updateRoomName = (id: string, name: string) =>
     setRooms(prev => prev.map(r => r.id === id ? { ...r, name } : r));
@@ -867,7 +913,7 @@ const App: React.FC = () => {
     addActivity(toRoomId, toRoom.name, 'transfer_in', `Received ${qtyToMove} ${item.uom} of "${item.name}" from ${fromRoom.name}`);
   };
 
-  const activeRoom = useMemo(() => rooms.find(r => r.id === activeRoomId), [rooms, activeRoomId]);
+  const activeRoom = useMemo(() => rooms.find(r => Number(r.id) === activeRoomId), [rooms, activeRoomId]);
 
   const userInitials = useMemo(() => {
     if (!user) return 'U';
@@ -1032,11 +1078,11 @@ const App: React.FC = () => {
   const adminRooms = useMemo(() => managedInventories.flatMap((inv) => inv.rooms || []), [managedInventories]);
   const adminHistory = useMemo(() => managedInventories.flatMap((inv) => inv.history || []), [managedInventories]);
 
-  if (!isAuthenticated) {
+  if (!session?.user) {
     return <LandingModal onLogin={handleLogin} />;
   }
 
-  if (isAuthenticated && isAdmin && user) {
+  if (session?.user && isAdmin && user) {
     return (
       <AdminDashboard
         user={user}
@@ -1092,15 +1138,16 @@ const App: React.FC = () => {
                 logs={logs}
                 onReceive={receiveStock}
                 onUpdateQty={updateItemQty}
+                onUpdateBatchQty={updateItemBatchQty}
                 onTransfer={moveItem}
                 onDeleteItem={deleteItem}
               />
             </>
           ) : (
-            user && (
-              <ProfilePage
-                user={user}
-                onLogout={handleLogout}
+            session?.user && (
+              <ProfilePage 
+                user={user} 
+                onLogout={handleLogout} 
                 onBack={() => setCurrentView('dashboard')}
                 onUpdateImages={handleUpdateUserImages}
               />
@@ -1113,7 +1160,7 @@ const App: React.FC = () => {
         <RoomModal
           room={activeRoom}
           allRooms={rooms}
-          logs={logs.filter(l => l.roomId === activeRoomId)}
+          logs={logs.filter(l => Number(l.roomId) === activeRoomId)}
           onClose={() => setActiveRoomId(null)}
           onUpdateName={updateRoomName}
           onReceive={receiveStock}
@@ -1128,3 +1175,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
