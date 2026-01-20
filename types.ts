@@ -3,6 +3,7 @@ export type Category = 'consumables' | 'equipment' | 'instruments' | 'materials'
 export type UOM = 'pcs' | 'box' | 'unit' | 'kit';
 
 export interface ItemBatch {
+  id: string;
   qty: number;
   unitPrice: number;
   expiryDate?: string | null;
@@ -20,6 +21,7 @@ export interface Item {
   category: Category;
   description: string;
   expiryDate?: string | null;
+  createdAt?: string;
   batches?: ItemBatch[];
 }
 
@@ -38,6 +40,10 @@ export interface ActivityLog {
   roomName: string;
   action: 'add' | 'remove' | 'delete' | 'transfer_out' | 'transfer_in' | 'edit' | 'receive';
   details: string;
+  actorId?: string;
+  actorName?: string;
+  beforeValue?: string;
+  afterValue?: string;
 }
 
 export interface PurchaseHistory {
@@ -58,12 +64,13 @@ export interface PurchaseHistory {
 }
 
 export interface UserProfile {
+  id: string;
   name: string;
   email: string;
   accountType: 'individual' | 'company' | 'admin';
   phone: string;
   position: string;
-  companyName?: string;
+  clinicName?: string;
   avatarUrl?: string;
   backgroundUrl?: string;
 }
@@ -72,3 +79,41 @@ export interface CatPosition {
   x: number;
   y: number;
 }
+
+export interface Collaborator {
+  id: string;
+  owner_id: string;
+  user_id: string;
+  role: 'viewer' | 'editor' | 'admin';
+  created_at: string;
+  profile?: UserProfile; // Joined profile data
+}
+
+export interface Invitation {
+  id: string;
+  owner_id: string;
+  email: string;
+  role: 'viewer' | 'editor' | 'admin';
+  token: string;
+  status: 'pending' | 'accepted' | 'revoked';
+  created_at: string;
+}
+
+export interface ExtractedItem {
+  id: string;
+  brand?: string;
+  product: string;
+  sku?: string;
+  quantity?: number;
+  uom?: string;
+  price?: number;
+  total?: number;
+  vendor?: string;
+  category?: string;
+  expiryDate?: string;
+}
+
+export type ChatHistory = {
+  role: "user" | "model";
+  parts: { text: string }[];
+};
