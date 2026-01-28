@@ -4,8 +4,7 @@ import { checkAuth } from "../services/checkAuth";
 export const verifySession = async () => {
     const { loggedIn, user } = await checkAuth();
     if (user?.error === "Authentication required") {
-      console.log('user error: ',user);
-      return { loggedIn: false, user: null };
+      return user;
     } else {
         return { loggedIn: true, user: user };
     }

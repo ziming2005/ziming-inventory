@@ -11,7 +11,10 @@ import ProfilePage from './ProfilePage';
 import AdminDashboard from './AdminDashboard';
 import { supabase } from './supabaseClient';
 import { verifySession } from './AdminDashboard/helper/verifySession';
-import { fetchSupabaseProfile } from './AdminDashboard/services/fetchSupabaseProfile';
+import { useSupabaseProfile } from './AdminDashboard/services/hook/useSupabaseProfile';
+import LoadingOverlay from './AdminDashboard/component/loadingOverlay';
+import { v4 as uuidv4 } from 'uuid';
+import { api } from './AdminDashboard/services/api';
 
 type ManagedInventory = {
   userId: string;
@@ -147,12 +150,19 @@ const adjustBatchesWithDelta = (item: Item, delta: number) => {
 };
 
 const App: React.FC = () => {
+  const {
+    data,
+    isLoading: profileLoading,
+    error: profileError
+  } = useSupabaseProfile();
+  const userProfile = data?.user;
+
   const [rooms, setRooms] = useState<Room[]>([]);
   const [activeRoomId, setActiveRoomId] = useState<number | null>(null);
   const [history, setHistory] = useState<PurchaseHistory[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [blueprint, setBlueprint] = useState<string | null>(null);
-  const [session, setSession] = useState<{ loggedIn: boolean; user: any } | null>(null);
+  const [session, setSession] = useState<{ loggedIn?: boolean; user?: any; profiles?: any; error?: string } | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isBootstrapped, setIsBootstrapped] = useState<boolean>(false);
   const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
@@ -170,18 +180,30 @@ const App: React.FC = () => {
   const [catPosition, setCatPosition] = useState<CatPosition>({ x: 20, y: 20 });
   const syncInFlight = useRef(false);
 
-  const checkSession = async () => {
-    return await verifySession().then(setSession);
-  }
-
   const fetchSession = async () => {
-    const profile = await fetchSupabaseProfile();
-    if (profile.user) {
-      await bootstrapUser(profile.user.id);
-    } else {
-      // setBlueprint(PRESET_BLUEPRINTS[0].url);
-    }
-  };
+  const result = await verifySession();
+    console.log('this res: ',result)
+  if (result?.user) {
+    setSession(result);
+    await bootstrapUser(result);
+  } else {
+    setBlueprint(PRESET_BLUEPRINTS[0].url);
+  }
+};
+
+  // const fetchSession = async () => {
+
+  //   console.log('data: ',data)
+  //   if (data) {
+  //     setSession(prev => ({
+  //       ...prev,
+  //       ...data
+  //     }));
+  //     await bootstrapUser(data);
+  //   } else {
+  //     setBlueprint(PRESET_BLUEPRINTS[0].url);
+  //   }
+  // };
 
   //   const fetchAdminData = async (force = false) => {
   //   if (!force && !isAdmin) return;
@@ -219,29 +241,46 @@ const App: React.FC = () => {
   // };
 
   useEffect(() => {
-    checkSession();
-    
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        bootstrapUser(session.user.id);
-      } else {
-        setIsAuthenticated(false);
-        setSupabaseUserId(null);
-        setIsAdmin(false);
-        setManagedProfiles([]);
-        setManagedInventories([]);
-        setAdminDataError(null);
-        setUser(null);
-        setRooms([]);
-        setHistory([]);
-        setLogs([]);
-        setBlueprint(PRESET_BLUEPRINTS[0].url);
+    if(session){
+      const { error } = session;
+      if(!error){
+        if (session?.profiles) {
+          console.log('session: ',session)
+          bootstrapUser(session.profiles);
+        } else {
+          setIsAuthenticated(false);
+          setSupabaseUserId(null);
+          setIsAdmin(false);
+          setManagedProfiles([]);
+          setManagedInventories([]);
+          setAdminDataError(null);
+          // setUser(null);
+          setRooms([]);
+          setHistory([]);
+          setLogs([]);
+          setBlueprint(PRESET_BLUEPRINTS[0].url);
+        }
       }
-    });
-    return () => {
-      listener.subscription.unsubscribe();
-    };
+    }
+  }, [session]);
+
+  useEffect(() => {
+    fetchSession();
   }, []);
+
+  useEffect(() => {
+    if (!userProfile) return; 
+    console.log('session: ',session)
+    console.log('profileData: ',userProfile)
+    if (!session || session.error) return;
+    if (!userProfile) return;
+    setSession(prev => ({
+      ...prev,
+      ...userProfile
+    }));
+  
+    bootstrapUser(userProfile);
+  }, [userProfile]);
 
   const fetchAdminData = async (force = false) => {
     if (!force && !isAdmin) return;
@@ -348,56 +387,45 @@ const App: React.FC = () => {
     }
   };
 
-  const bootstrapUser = async (userId: string) => {
+  const bootstrapUser = async ({profiles: profile, meta: meta, rooms: roomsData, rooms_error: roomsError, items_data: itemsData, history_data: historyData, log_data: logData}: any) => {
+    if (!profile){
+      return
+    }
+    const { user_id: userId} = profile;
     setIsBootstrapped(false);
     setSupabaseUserId(userId);
-
-    const { data: authUser } = await supabase.auth.getUser();
     const storedImages = loadUserImages(userId);
 
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (profileError && profileError.code !== 'PGRST116') {
-      console.error('Profile fetch error', profileError);
-    }
-    console.log('prof: ',profile)
-
     let finalProfile = profile;
-    if (!profile && authUser.user) {
+    if (profile.user) {
       const fallbackProfile = {
         user_id: userId,
-        email: authUser.user.email || '',
-        name: authUser.user.user_metadata?.name || 'User',
-        account_type: (authUser.user.user_metadata?.account_type as any) || 'individual',
-        phone: authUser.user.user_metadata?.phone || '',
-        position: authUser.user.user_metadata?.position || '',
-        company_name: authUser.user.user_metadata?.company_name || null
+        email: profile.user.email || '',
+        name: profile.user.user_metadata?.name || 'User',
+        account_type: (profile.user.user_metadata?.account_type as any) || 'individual',
+        phone: profile.user.user_metadata?.phone || '',
+        position: profile.user.user_metadata?.position || '',
+        company_name: profile.user.user_metadata?.company_name || null
       };
-      const { data: insertedProfile, error: insertProfileError } = await supabase
-        .from('profiles')
-        .upsert(fallbackProfile, { onConflict: 'user_id' })
-        .select('*')
-        .single();
-      if (insertProfileError) {
-        console.error('Profile upsert during bootstrap error', insertProfileError);
-      } else {
-        finalProfile = insertedProfile;
-      }
+      // const { data: insertedProfile, error: insertProfileError } = await supabase
+      //   .from('profiles')
+      //   .upsert(fallbackProfile, { onConflict: 'user_id' })
+      //   .select('*')
+      //   .single();
+      // if (insertProfileError) {
+      //   console.error('Profile upsert during bootstrap error', insertProfileError);
+      // } else {
+      //   finalProfile = insertedProfile;
+      // }
     }
 
-    const accountTypeValue = (finalProfile?.account_type as any) || (authUser.user?.user_metadata?.account_type as any) || 'individual';
-    const profileSource = finalProfile || (authUser.user ? {
-      name: authUser.user.user_metadata?.name || authUser.user.email || 'User',
-      email: authUser.user.email || '',
-      phone: authUser.user.user_metadata?.phone || '',
-      position: authUser.user.user_metadata?.position || '',
-      companyName: authUser.user.user_metadata?.company_name || undefined
+    const accountTypeValue = (finalProfile?.account_type as any) || (profile.user?.user_metadata?.account_type as any) || 'individual';
+    const profileSource = finalProfile || (profile.user ? {
+      name: profile.user.user_metadata?.name || profile.user.email || 'User',
+      email: profile.user.email || '',
+      phone: profile.user.user_metadata?.phone || '',
+      position: profile.user.user_metadata?.position || '',
+      companyName: profile.user.user_metadata?.company_name || undefined
     } : null);
 
     if (profileSource) {
@@ -413,36 +441,9 @@ const App: React.FC = () => {
       });
     }
 
-    const { data: meta } = await supabase
-      .from('inventory_meta')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    const { data: roomsData, error: roomsError } = await supabase
-      .from('inventory_rooms')
-      .select('id, name, pos_x, pos_y')
-      .eq('user_id', userId);
     if (roomsError) {
       console.error('Rooms fetch error', roomsError);
     }
-
-    const roomIds = (roomsData || []).map((r: any) => r.id);
-    const { data: itemsData } = roomIds.length
-      ? await supabase.from('inventory_items').select('*, item_batches:inventory_item_batches(*)').in('room_id', roomIds)
-      : { data: [] as any[] };
-
-    const { data: historyData } = await supabase
-      .from('inventory_purchase_history')
-      .select('*')
-      .eq('user_id', userId)
-      .order('occurred_at', { ascending: false });
-
-    const { data: logData } = await supabase
-      .from('inventory_activity_logs')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
 
     const itemsByRoom: Record<string, Item[]> = {};
     (itemsData || []).forEach((row: any) => {
@@ -505,10 +506,10 @@ const App: React.FC = () => {
         details: l.details
       }))
     );
-    setBlueprint(meta?.blueprint || PRESET_BLUEPRINTS[0].url);
+    setBlueprint(meta[0]?.blueprint || PRESET_BLUEPRINTS[0].url);
     setCatPosition({
-      x: meta?.cat_position_x !== undefined ? Number(meta.cat_position_x) : 20,
-      y: meta?.cat_position_y !== undefined ? Number(meta.cat_position_y) : 20
+      x: meta[0]?.cat_position_x !== undefined ? Number(meta[0].cat_position_x) : 20,
+      y: meta[0]?.cat_position_y !== undefined ? Number(meta[0].cat_position_y) : 20
     });
 
     const isUserAdmin = accountTypeValue === 'admin';
@@ -519,8 +520,7 @@ const App: React.FC = () => {
       setManagedProfiles([]);
       setManagedInventories([]);
     }
-    if(session?.user?.loggedIn){
-      setSession(session?.user)
+    if (!session?.error && session?.profiles?.[0]?.user?.loggedIn) {
       setIsAuthenticated(true);
     }
     setIsBootstrapped(true);
@@ -554,6 +554,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = async () => {
+    await api.post("/auth/logout"); 
     await supabase.auth.signOut();
     setIsAuthenticated(false);
     setIsBootstrapped(false);
@@ -620,6 +621,7 @@ const App: React.FC = () => {
   };
 
   const addRoom = (x: number, y: number) => {
+    const myUUID = uuidv4();
     setRooms(prev => {
       const roomNumbers = prev
         .map(r => {
@@ -633,7 +635,7 @@ const App: React.FC = () => {
         : 1;
 
       const newRoom: Room = {
-        id: crypto.randomUUID(),
+        id: myUUID,
         name: `Room ${nextNumber}`,
         x,
         y,
@@ -916,9 +918,9 @@ const App: React.FC = () => {
   const activeRoom = useMemo(() => rooms.find(r => Number(r.id) === activeRoomId), [rooms, activeRoomId]);
 
   const userInitials = useMemo(() => {
-    if (!user) return 'U';
-    return user.name.split(' ').map(n => n[0]).join('').toUpperCase();
-  }, [user]);
+    if (!userProfile?.profiles) return 'U';
+    return userProfile?.profiles?.name.split(' ').map(n => n[0]).join('').toUpperCase();
+  }, [userProfile]);
 
   useEffect(() => {
     const sync = async () => {
@@ -1070,7 +1072,7 @@ const App: React.FC = () => {
     if (isAuthenticated && isBootstrapped) {
       const timer = setTimeout(() => {
         sync();
-      }, 2000); // Debounce sync by 2 seconds
+      }, 2000);
       return () => clearTimeout(timer);
     }
   }, [rooms, history, logs, blueprint, catPosition, isAuthenticated, isBootstrapped, supabaseUserId, isAdmin]);
@@ -1078,11 +1080,15 @@ const App: React.FC = () => {
   const adminRooms = useMemo(() => managedInventories.flatMap((inv) => inv.rooms || []), [managedInventories]);
   const adminHistory = useMemo(() => managedInventories.flatMap((inv) => inv.history || []), [managedInventories]);
 
-  if (!session?.user) {
+  if(profileLoading){
+    return <LoadingOverlay isLoading={profileLoading} message="Fetching..."/>
+  }
+
+  if (session?.profiles == undefined || session?.error) {
     return <LandingModal onLogin={handleLogin} />;
   }
 
-  if (session?.user && isAdmin && user) {
+  if (!session?.error && session?.profiles !== undefined && session?.profiles?.[0]?.user && isAdmin && user) {
     return (
       <AdminDashboard
         user={user}
@@ -1105,9 +1111,9 @@ const App: React.FC = () => {
         onProfileClick={() => setCurrentView('profile')}
         onDashboardClick={() => setCurrentView('dashboard')}
         onLogout={handleLogout}
-        user={user}
+        user={userProfile?.profiles}
         userInitials={userInitials}
-        userAvatarUrl={user?.avatarUrl}
+        userAvatarUrl={userProfile?.avatarUrl}
       />
 
       <div className="max-w-[1600px] mx-auto w-full flex flex-col gap-8 px-6 md:px-16 lg:px-32 py-8">
@@ -1144,7 +1150,7 @@ const App: React.FC = () => {
               />
             </>
           ) : (
-            session?.user && (
+            !session?.error && session?.profiles?.user && (
               <ProfilePage 
                 user={user} 
                 onLogout={handleLogout} 
